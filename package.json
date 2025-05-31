@@ -1,0 +1,24 @@
+{
+  "name": "enzymeml",
+  "version": "1.1.0",
+  "author": "EnzymeML",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/enzymeml/enzymeml-ts.git"
+  },
+  "description": "EnzymeML is a data model for describing enzymatic experiments. This package contains the TypeScript definitions for the EnzymeML data model based on the EnzymeML V2 specification and Zod.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "zod": "^3.25.42"
+  }
+}
