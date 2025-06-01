@@ -65,6 +65,7 @@ The library also provides fetchers for the following sources:
 - [PDB](https://www.rcsb.org/)
 - [UniProt](https://www.uniprot.org/)
 - [Rhea](https://www.rhea-db.org/)
+- [PubChem](https://pubchem.ncbi.nlm.nih.gov/)
 
 In the following example, we will utilize the fetchers to fetch a reaction from Rhea, which will return a reaction and a list of small molecules fetched from ChEBI. In addition, we will fetch a protein from PDB and a small molecule from PubChem.
 
