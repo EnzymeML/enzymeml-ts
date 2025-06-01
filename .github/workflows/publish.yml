@@ -4,9 +4,6 @@ on:
   release:
     types: [published]
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   publish:
     runs-on: ubuntu-latest
