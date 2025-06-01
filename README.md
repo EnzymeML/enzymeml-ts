@@ -76,3 +76,9 @@ const myFunction = (data: EnzymeMLDocument): SmallMolecule => {
 ## Contributing
 
 Contributions are welcome! Please feel free to submit an issue or a pull request.
+
+---
+
+<div align="center">
+<strong>Made with ❤️ by the EnzymeML Team</strong>
+</div>
