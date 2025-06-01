@@ -57,6 +57,36 @@ if (!result.success) {
 }
 ```
 
+### Fetchers
+
+The library also provides fetchers for the following sources:
+
+- [ChEBI](https://www.ebi.ac.uk/chebi/)
+- [PDB](https://www.rcsb.org/)
+- [UniProt](https://www.uniprot.org/)
+- [Rhea](https://www.rhea-db.org/)
+
+In the following example, we will utilize the fetchers to fetch a reaction from Rhea, which will return a reaction and a list of small molecules fetched from ChEBI. In addition, we will fetch a protein from PDB and a small molecule from PubChem.
+
+```typescript
+import { fetchRhea, fetchPdb, fromPubChem } from 'enzymeml';
+
+const enzmldoc: EnzymeMLDocument = {
+    ... // Your EnzymeML document
+}
+
+const [reaction, smallMolecules] = await fetchRhea('RHEA:13065');
+
+enzmldoc.reactions.push(reaction);
+enzmldoc.small_molecules.push(...smallMolecules);
+
+const protein = await fetchPdb('PDB:1LYZ');
+enzmldoc.proteins.push(protein);
+
+const smallMolecule = await fromPubChem('ethanol');
+enzmldoc.small_molecules.push(smallMolecule);
+```
+
 ### Type-safe interface
 
 The following example shows how to use the `EnzymeMLDocument` type to create a type-safe interface for your users.
