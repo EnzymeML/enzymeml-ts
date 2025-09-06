@@ -13,6 +13,7 @@ EnzymeML is a standardized data exchange format that supports the comprehensive 
 - ⚡ **Runtime validation** using [Zod](https://github.com/colinhacks/zod)
 - 📝 **Complete type inference** for excellent IDE support
 - 🌐 **JSON-LD compatible** for semantic web applications
+- 🔍 **OpenAI streaming utilities** for AI-powered data extraction from text and files using the OpenAI API
 
 ## Installation
 
