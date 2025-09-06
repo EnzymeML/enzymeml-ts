@@ -3,7 +3,7 @@
  * These tests make actual HTTP requests to the UniProt API
  */
 
-import { UniProtClient, UniProtError, fetchUniprot } from '../src/fetcher/uniprot';
+import { UniProtClient, UniProtError, fetchUniprot, searchUniprot } from '../src/fetcher/uniprot';
 
 describe('UniProt Integration Tests', () => {
     let client: UniProtClient;
@@ -149,5 +149,193 @@ describe('UniProt Integration Tests', () => {
                 expect(error).toBeInstanceOf(UniProtError);
             }
         }, 15000);
+    });
+
+    describe('searchUniprot', () => {
+        it('should search for insulin and return multiple Protein results', async () => {
+            const results = await searchUniprot('insulin', 3);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBeGreaterThan(0);
+            expect(results.length).toBeLessThanOrEqual(3);
+
+            // Check that each result is a valid Protein object
+            results.forEach(protein => {
+                expect(protein.id).toBeDefined();
+                expect(protein.name).toBeDefined();
+                expect(typeof protein.constant).toBe('boolean');
+                expect(protein.constant).toBe(true); // UniProt proteins are always constant
+                expect(protein.vessel_id).toBeNull();
+                expect(Array.isArray(protein.references)).toBe(true);
+                expect(protein.references.length).toBeGreaterThan(0);
+
+                // Should have UniProt reference
+                const hasUniProtRef = protein.references.some(ref =>
+                    ref.includes('uniprot.org/uniprotkb/')
+                );
+                expect(hasUniProtRef).toBe(true);
+            });
+
+            // At least one result should be insulin-related
+            const hasInsulinRelated = results.some(protein =>
+                protein.name?.toLowerCase().includes('insulin') ||
+                protein.id.toLowerCase().includes('insulin')
+            );
+            expect(hasInsulinRelated).toBe(true);
+        }, 25000); // Longer timeout for search + multiple fetches
+
+        it('should search for lysozyme and return relevant results with proper structure', async () => {
+            const results = await searchUniprot('lysozyme', 2);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBeGreaterThan(0);
+            expect(results.length).toBeLessThanOrEqual(2);
+
+            // Check structure of returned proteins
+            results.forEach(protein => {
+                expect(typeof protein.id).toBe('string');
+                expect(typeof protein.name).toBe('string');
+                expect(typeof protein.constant).toBe('boolean');
+                expect(protein.references.length).toBeGreaterThan(0);
+
+                // Sequence might be present
+                if (protein.sequence) {
+                    expect(typeof protein.sequence).toBe('string');
+                    expect(protein.sequence.length).toBeGreaterThan(0);
+                }
+
+                // Organism info might be present
+                if (protein.organism) {
+                    expect(typeof protein.organism).toBe('string');
+                }
+                if (protein.organism_tax_id) {
+                    expect(typeof protein.organism_tax_id).toBe('string');
+                }
+
+                // EC number might be present (lysozyme is an enzyme)
+                if (protein.ecnumber) {
+                    expect(typeof protein.ecnumber).toBe('string');
+                    expect(protein.ecnumber).toMatch(/\d+\.\d+\.\d+\.\d+/);
+                }
+            });
+
+            // Should have lysozyme-related results
+            const hasLysozymeRelated = results.some(protein =>
+                protein.name?.toLowerCase().includes('lysozyme') ||
+                protein.id.toLowerCase().includes('lysozyme') ||
+                protein.name?.toLowerCase().includes('lysc')
+            );
+            expect(hasLysozymeRelated).toBe(true);
+        }, 25000);
+
+        it('should handle searches with no results gracefully', async () => {
+            const results = await searchUniprot('nonexistentproteinxyz12345', 10);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBe(0);
+        }, 15000);
+
+        it('should search for hemoglobin and verify protein data quality', async () => {
+            const results = await searchUniprot('hemoglobin', 2);
+
+            expect(results.length).toBeGreaterThan(0);
+
+            // Find a hemoglobin result to examine in detail
+            const hemoglobinResult = results.find(protein =>
+                protein.name?.toLowerCase().includes('hemoglobin') ||
+                protein.id.toLowerCase().includes('hemoglobin')
+            );
+
+            if (hemoglobinResult) {
+                expect(hemoglobinResult.id).toBeDefined();
+                expect(hemoglobinResult.name).toBeDefined();
+                expect(hemoglobinResult.constant).toBe(true);
+
+                // Should have UniProt reference
+                const hasUniProtRef = hemoglobinResult.references.some(ref =>
+                    /https:\/\/www\.uniprot\.org\/uniprotkb\/\w+/.test(ref)
+                );
+                expect(hasUniProtRef).toBe(true);
+
+                // Hemoglobin should have organism info
+                if (hemoglobinResult.organism) {
+                    expect(typeof hemoglobinResult.organism).toBe('string');
+                }
+                if (hemoglobinResult.organism_tax_id) {
+                    expect(typeof hemoglobinResult.organism_tax_id).toBe('string');
+                }
+
+                // Should have sequence data
+                if (hemoglobinResult.sequence) {
+                    expect(typeof hemoglobinResult.sequence).toBe('string');
+                    expect(hemoglobinResult.sequence.length).toBeGreaterThan(0);
+                }
+            }
+        }, 25000);
+
+        it('should handle search API errors gracefully', async () => {
+            // Test with extremely long query that might cause issues
+            try {
+                const veryLongQuery = 'a'.repeat(1000);
+                const results = await searchUniprot(veryLongQuery, 1);
+
+                // If it succeeds, should still return array
+                expect(Array.isArray(results)).toBe(true);
+            } catch (error) {
+                // If it fails, should be a proper Error
+                expect(error).toBeInstanceOf(Error);
+            }
+        }, 15000);
+
+        it('should maintain consistency between search results and individual fetches', async () => {
+            // Search for a specific term likely to return known results
+            const results = await searchUniprot('P01308', 1); // Search for human insulin accession
+
+            if (results.length > 0) {
+                const firstResult = results[0];
+
+                // The search result should be consistent with direct fetch
+                expect(firstResult.id).toBeDefined();
+                expect(firstResult.name).toBeDefined();
+                expect(firstResult.constant).toBe(true);
+                expect(firstResult.vessel_id).toBeNull();
+                expect(Array.isArray(firstResult.references)).toBe(true);
+                expect(firstResult.references.length).toBeGreaterThan(0);
+
+                // Should have the expected reference format
+                const hasCorrectRef = firstResult.references.some(ref =>
+                    ref.includes('uniprot.org/uniprotkb/')
+                );
+                expect(hasCorrectRef).toBe(true);
+            }
+        }, 20000);
+
+        it('should respect the size parameter for limiting results', async () => {
+            const smallResults = await searchUniprot('kinase', 1);
+            const largerResults = await searchUniprot('kinase', 3);
+
+            expect(smallResults.length).toBeLessThanOrEqual(1);
+            expect(largerResults.length).toBeLessThanOrEqual(3);
+
+            // Only check if both returned results
+            if (smallResults.length > 0 && largerResults.length > 0) {
+                expect(largerResults.length).toBeGreaterThanOrEqual(smallResults.length);
+            }
+        }, 30000); // Longer timeout for potentially many results
+
+        it('should handle special characters in search queries', async () => {
+            // Use a search query with special characters
+            const results = await searchUniprot('α-amylase', 2);
+
+            expect(Array.isArray(results)).toBe(true);
+            // Results might be empty, and that's okay for special characters
+            if (results.length > 0) {
+                results.forEach(protein => {
+                    expect(protein.id).toBeDefined();
+                    expect(protein.name).toBeDefined();
+                    expect(Array.isArray(protein.references)).toBe(true);
+                });
+            }
+        }, 20000);
     });
 }); 

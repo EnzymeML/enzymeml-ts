@@ -79,6 +79,43 @@ export async function fetchUniprot(
 }
 
 /**
+ * Search for UniProt entries by query string.
+ * 
+ * This function searches the UniProt database using the REST API and returns
+ * an array of Protein objects for each matching entry.
+ * 
+ * @param query - The search query string to find UniProt entries
+ * @param size - The maximum number of search results to return
+ * @returns A promise that resolves to an array of Protein objects
+ * @throws Error if the search request fails or the API is unavailable
+ * 
+ * @example
+ * ```typescript
+ * // Search for insulin entries
+ * const insulinResults = await searchUniprot('insulin', 10);
+ * 
+ * // Search for lysozyme entries
+ * const lysozymeResults = await searchUniprot('lysozyme', 5);
+ * ```
+ */
+export async function searchUniprot(query: string, size: number): Promise<Protein[]> {
+    const url = new URL('https://rest.uniprot.org/uniprotkb/search');
+    url.searchParams.set('query', query);
+    url.searchParams.set('fields', 'accession,id,protein_name,organism_name');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('size', size.toString());
+
+    const response = await fetch(url.toString());
+    const data: SearchUniProtResponse = await response.json();
+    const fetchPromises = data.results.map((entry) => fetchUniprot(entry.primaryAccession));
+    return Promise.all(fetchPromises);
+}
+
+interface SearchUniProtResponse {
+    results: { primaryAccession: string }[];
+}
+
+/**
  * Interface for EC number in UniProt API.
  */
 export interface ECNumber {
