@@ -10,6 +10,7 @@ import OpenAI, { type ClientOptions } from "openai";
 import { z, type ZodTypeAny } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { ResponseInput, Tool } from "openai/resources/responses/responses";
+import type { BaseInput, MessageInput } from "./input-types.js";
 
 /**
  * Represents a single item in the streaming response.
@@ -27,8 +28,8 @@ export type StreamItem =
 export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
     /** The OpenAI model to use (e.g., 'gpt-5', 'gpt-4o') */
     model: string;
-    /** Array of messages forming the conversation context */
-    input: Array<{ role: "system" | "user" | "assistant"; content: unknown }>;
+    /** Array of messages forming the conversation context - can be BaseInput instances or raw message objects */
+    input: Array<{ role: "system" | "user" | "assistant"; content: unknown } | BaseInput>;
     /** Optional Zod schema for structured output validation */
     schema?: TSchema;
     /** When you expect multiple items within a list */
@@ -60,6 +61,24 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  * const { chunks, final } = extractData({
  *   model: 'gpt-4',
  *   input: [{ role: 'user', content: 'Tell me a joke' }]
+ * });
+ * 
+ * // Using input type classes
+ * const userQuery = new UserQuery('Tell me a joke');
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4',
+ *   input: [userQuery]
+ * });
+ * 
+ * // With file upload
+ * const pdfUpload = new PDFUpload('./document.pdf');
+ * await pdfUpload.upload(); // Upload the file first
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4',
+ *   input: [
+ *     new UserQuery('Analyze this document'),
+ *     pdfUpload
+ *   ]
  * });
  * 
  * // Consume stream with async iteration
@@ -100,6 +119,16 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         ],
     } = params;
 
+    // Convert input to proper message format, handling BaseInput instances
+    const processedInput = input.map((item): MessageInput => {
+        // If it's a BaseInput instance, convert it to a message
+        if (item && typeof item === 'object' && 'toMessage' in item) {
+            return (item as BaseInput).toMessage();
+        }
+        // Otherwise, assume it's already a proper message object
+        return item as MessageInput;
+    });
+
     let schemaInput: ZodTypeAny | undefined = schema;
     if (multiple && schema) {
         schemaInput = z.object({
@@ -110,7 +139,7 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
 
     const stream = client.responses.stream({
         model,
-        input: input as ResponseInput,
+        input: processedInput as ResponseInput,
         tools,
         ...(schemaInput
             ? { text: { format: zodTextFormat(schemaInput, schemaKey) } }
@@ -158,3 +187,4 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         final: stream.finalResponse(),
     };
 }
+
