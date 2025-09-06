@@ -59,7 +59,7 @@ if (!result.success) {
 
 ### Fetchers
 
-The library also provides fetchers for the following sources:
+The library provides both direct fetchers and search capabilities for the following sources:
 
 - [ChEBI](https://www.ebi.ac.uk/chebi/)
 - [PDB](https://www.rcsb.org/)
@@ -67,25 +67,50 @@ The library also provides fetchers for the following sources:
 - [Rhea](https://www.rhea-db.org/)
 - [PubChem](https://pubchem.ncbi.nlm.nih.gov/)
 
-In the following example, we will utilize the fetchers to fetch a reaction from Rhea, which will return a reaction and a list of small molecules fetched from ChEBI. In addition, we will fetch a protein from PDB and a small molecule from PubChem.
-
 ```typescript
-import { fetchRhea, fetchPdb, fromPubChem } from 'enzymeml';
+import { fetchRhea, fetchPdb, fromPubChem, searchChebi } from 'enzymeml';
 
 const enzmldoc: EnzymeMLDocument = {
     ... // Your EnzymeML document
 }
 
+// Fetch specific entries by ID
 const [reaction, smallMolecules] = await fetchRhea('RHEA:13065');
+const protein = await fetchPdb('PDB:1LYZ');
+const smallMolecule = await fromPubChem('ethanol');
+
+// Search for entries by name
+const glucoseResults = await searchChebi('glucose', 10);
 
 enzmldoc.reactions.push(reaction);
-enzmldoc.small_molecules.push(...smallMolecules);
-
-const protein = await fetchPdb('PDB:1LYZ');
+enzmldoc.small_molecules.push(...smallMolecules, ...glucoseResults);
 enzmldoc.proteins.push(protein);
+```
 
-const smallMolecule = await fromPubChem('ethanol');
-enzmldoc.small_molecules.push(smallMolecule);
+### LLM Integration
+
+The library includes OpenAI streaming utilities for AI-powered data generation and analysis:
+
+```typescript
+import { extractData, EnzymeMLDocumentSchema } from 'enzymeml';
+
+// Generate structured EnzymeML documents with AI
+const { chunks, final } = extractData({
+  model: 'gpt-4',
+  input: [{ role: 'user', content: 'Create an EnzymeML document for glucose metabolism' }],
+  schema: EnzymeMLDocumentSchema,
+  schemaKey: 'enzymeml_document'
+});
+
+// Stream the response
+for await (const chunk of chunks) {
+  if (chunk.kind === 'text') {
+    console.log(chunk.delta);
+  }
+}
+
+// Get the final validated document
+const document = await final;
 ```
 
 ### Type-safe interface
