@@ -45,3 +45,27 @@ export {
   type RheaQuery,
   type RheaTsvRow
 } from './fetcher/rhea';
+
+// LLM utilities
+export {
+  extractData,
+  type CreateStreamParams,
+  type StreamItem
+} from './llm';
+
+// Input type classes and file upload utilities
+export {
+  BaseInput,
+  ImageUpload,
+  PDFUpload,
+  UserQuery,
+  createInputFromFile,
+  uploadFile,
+  getFilePurpose,
+  isFileTypeSupported,
+  SUPPORTED_FILE_TYPES,
+  type UploadResult,
+  type InputContent,
+  type MessageInput,
+  type UploadFileParams
+} from './input-types';
