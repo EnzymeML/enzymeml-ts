@@ -1,4 +1,4 @@
-import { fromPubChem } from '../src/fetcher/pubchem';
+import { fetchPubChem } from '../src/fetcher/pubchem';
 import { Compound } from 'pubchem';
 import { SmallMolecule } from '../src';
 
@@ -44,7 +44,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('caffeine');
+            const result = await fetchPubChem('caffeine');
 
             expect(result).toEqual({
                 id: '2519',
@@ -84,7 +84,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('aspirin');
+            const result = await fetchPubChem('aspirin');
 
             expect(result.id).toBe('2244');
             expect(result.name).toBe('C9H8O4');
@@ -118,7 +118,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('glucose');
+            const result = await fetchPubChem('glucose');
 
             expect(result.id).toBe('5793');
             expect(result.name).toBe('C6H12O6');
@@ -154,7 +154,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('lidocaine');
+            const result = await fetchPubChem('lidocaine');
 
             expect(result.canonical_smiles).toContain('CCN(CC)CCNC(=O)');
             expect(result.inchi).toContain('/C20H25N3O/');
@@ -186,7 +186,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('water');
+            const result = await fetchPubChem('water');
 
             expect(result.id).toBe('962');
             expect(result.name).toBe('H2O');
@@ -220,7 +220,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            const result = await fromPubChem('ethanol');
+            const result = await fetchPubChem('ethanol');
 
             expect(result.id).toBe('00000702');
             expect(result.name).toBe('C2H6O');
@@ -234,7 +234,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockRejectedValue(rateLimitError);
 
-            await expect(fromPubChem('caffeine')).rejects.toThrow('Request failed with status code 429');
+            await expect(fetchPubChem('caffeine')).rejects.toThrow('Request failed with status code 429');
             expect(console.error).toHaveBeenCalledWith('Error searching PubChem: Request failed with status code 429');
         });
 
@@ -243,7 +243,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockRejectedValue(notFoundError);
 
-            await expect(fromPubChem('nonexistentcompound123')).rejects.toThrow('No matches found for the specified compound');
+            await expect(fetchPubChem('nonexistentcompound123')).rejects.toThrow('No matches found for the specified compound');
             expect(console.error).toHaveBeenCalledWith('Error searching PubChem: No matches found for the specified compound');
         });
 
@@ -262,7 +262,7 @@ describe('fromName Integration Tests', () => {
 
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
-            await expect(fromPubChem('ethanol')).rejects.toThrow('Invalid identifier data');
+            await expect(fetchPubChem('ethanol')).rejects.toThrow('Invalid identifier data');
             expect(console.error).toHaveBeenCalledWith('Error searching PubChem: Invalid identifier data');
         });
     });
@@ -303,7 +303,7 @@ describe('fromName Integration Tests', () => {
                 });
             });
 
-            const results = await Promise.all(compounds.map(compound => fromPubChem(compound)));
+            const results = await Promise.all(compounds.map(compound => fetchPubChem(compound)));
 
             expect(results).toHaveLength(3);
             expect(results[0].id).toBe('2519'); // caffeine
@@ -330,7 +330,7 @@ describe('fromName Integration Tests', () => {
             MockedCompound.fromName = jest.fn().mockResolvedValue(mockCompound);
 
             const startTime = Date.now();
-            const result = await fromPubChem('caffeine');
+            const result = await fetchPubChem('caffeine');
             const duration = Date.now() - startTime;
 
             expect(result.id).toBe('2519');
