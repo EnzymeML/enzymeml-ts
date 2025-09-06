@@ -9,6 +9,44 @@ import { XMLParser } from 'fast-xml-parser';
 import { SmallMolecule } from '..';
 
 /**
+ * Search for ChEBI entries by query string.
+ * 
+ * This function searches the ChEBI database using the EBI OLS4 API and returns
+ * an array of SmallMolecule objects for each matching entry.
+ * 
+ * @param query - The search query string to find ChEBI entries
+ * @param size - The maximum number of search results to return
+ * @returns A promise that resolves to an array of SmallMolecule objects
+ * @throws Error if the search request fails or the API is unavailable
+ * 
+ * @example
+ * ```typescript
+ * // Search for glucose entries
+ * const glucoseResults = await searchChebi('glucose', 10);
+ * 
+ * // Search for ATP entries
+ * const atpResults = await searchChebi('ATP', 5);
+ * ```
+ */
+export async function searchChebi(query: string, size: number): Promise<SmallMolecule[]> {
+    const url = new URL('https://www.ebi.ac.uk/ols4/api/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('ontology', 'chebi');
+    url.searchParams.set('rows', size.toString());
+
+    const response = await fetch(url.toString());
+    const searchResults: SearchResponse = await response.json();
+
+    const fetchPromises = searchResults.response.docs.map((result) => {
+        // Convert the short_form from CHEBI_12345 to 12345 format
+        const chebiId = result.short_form.replace('CHEBI_', '');
+        return fetchChebi(chebiId);
+    });
+
+    return Promise.all(fetchPromises);
+}
+
+/**
  * Fetch a ChEBI entry by ID and convert it to a SmallMolecule object.
  * 
  * @param chebiId - The ChEBI ID to fetch
@@ -46,6 +84,21 @@ export async function fetchChebi(
     };
 
     return smallMolecule;
+}
+
+interface SearchResponse {
+    response: { docs: SearchResult[] }
+}
+
+interface SearchResult {
+    iri: string;
+    ontology_name: string;
+    ontology_prefix: string;
+    short_form: string;
+    description: string[];
+    label: string;
+    obo_id: string;
+    type: string;
 }
 
 /**

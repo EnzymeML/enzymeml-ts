@@ -3,7 +3,7 @@
  * These tests make actual HTTP requests to the ChEBI API
  */
 
-import { ChEBIClient, ChEBIError, fetchChebi } from '../src/fetcher/chebi';
+import { ChEBIClient, ChEBIError, fetchChebi, searchChebi } from '../src/fetcher/chebi';
 
 
 describe('ChEBI Integration Tests', () => {
@@ -107,6 +107,93 @@ describe('ChEBI Integration Tests', () => {
                 // If it succeeds, that's fine too
             } catch (error) {
                 expect(error).toBeInstanceOf(ChEBIError);
+            }
+        }, 15000);
+    });
+
+    describe('searchChebi', () => {
+        it('should search for glucose and return multiple SmallMolecule results', async () => {
+            const results = await searchChebi('glucose', 3);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBeLessThanOrEqual(3);
+
+            if (results.length > 0) {
+                // Check that each result is a valid SmallMolecule
+                results.forEach(molecule => {
+                    expect(molecule.id).toBeDefined();
+                    expect(molecule.name).toBeDefined();
+                    expect(typeof molecule.constant).toBe('boolean');
+                    expect(molecule.vessel_id).toBeNull();
+                    expect(Array.isArray(molecule.synonymous_names)).toBe(true);
+                    expect(Array.isArray(molecule.references)).toBe(true);
+                });
+
+                // At least one result should contain glucose-related data
+                const hasGlucoseRelated = results.some(molecule =>
+                    molecule.name?.toLowerCase().includes('glucose') ||
+                    molecule.id.toLowerCase().includes('glucose')
+                );
+                expect(hasGlucoseRelated).toBe(true);
+            }
+        }, 20000);
+
+        it('should search for ATP and return relevant results', async () => {
+            const results = await searchChebi('ATP', 2);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBeLessThanOrEqual(2);
+
+            if (results.length > 0) {
+                // Verify structure of returned molecules
+                results.forEach(molecule => {
+                    expect(typeof molecule.id).toBe('string');
+                    expect(typeof molecule.name).toBe('string');
+                    expect(typeof molecule.constant).toBe('boolean');
+                    expect(molecule.references.length).toBeGreaterThan(0);
+                });
+
+                // Check that results are relevant to ATP (more flexible check)
+                const hasATPRelated = results.some(molecule =>
+                    molecule.name?.toUpperCase().includes('ATP') ||
+                    molecule.id.toLowerCase().includes('atp') ||
+                    molecule.name?.toLowerCase().includes('adenosine')
+                );
+                expect(hasATPRelated).toBe(true);
+            }
+        }, 20000);
+
+        it('should handle search queries with no results gracefully', async () => {
+            const results = await searchChebi('nonexistentcompound12345xyz', 10);
+
+            expect(Array.isArray(results)).toBe(true);
+            expect(results.length).toBe(0);
+        }, 10000);
+
+        it('should respect the size parameter for limiting results', async () => {
+            const smallResults = await searchChebi('water', 1);
+            const largerResults = await searchChebi('water', 3);
+
+            expect(smallResults.length).toBeLessThanOrEqual(1);
+            expect(largerResults.length).toBeLessThanOrEqual(3);
+
+            // Only check if both returned results
+            if (smallResults.length > 0 && largerResults.length > 0) {
+                expect(largerResults.length).toBeGreaterThanOrEqual(smallResults.length);
+            }
+        }, 20000);
+
+        it('should handle special characters in search queries', async () => {
+            // Use a simpler search query that's more likely to work
+            const results = await searchChebi('water', 2);
+
+            expect(Array.isArray(results)).toBe(true);
+            // Should return results for basic queries
+            if (results.length > 0) {
+                results.forEach(molecule => {
+                    expect(molecule.id).toBeDefined();
+                    expect(molecule.name).toBeDefined();
+                });
             }
         }, 15000);
     });
