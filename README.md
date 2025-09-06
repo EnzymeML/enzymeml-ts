@@ -68,7 +68,7 @@ The library provides both direct fetchers and search capabilities for the follow
 - [PubChem](https://pubchem.ncbi.nlm.nih.gov/)
 
 ```typescript
-import { fetchRhea, fetchPdb, fromPubChem, searchChebi } from 'enzymeml';
+import { fetchRhea, fetchPdb, fetchPubChem, searchChebi } from 'enzymeml';
 
 const enzmldoc: EnzymeMLDocument = {
     ... // Your EnzymeML document
@@ -77,7 +77,7 @@ const enzmldoc: EnzymeMLDocument = {
 // Fetch specific entries by ID
 const [reaction, smallMolecules] = await fetchRhea('RHEA:13065');
 const protein = await fetchPdb('PDB:1LYZ');
-const smallMolecule = await fromPubChem('ethanol');
+const smallMolecule = await fetchPubChem('ethanol');
 
 // Search for entries by name
 const glucoseResults = await searchChebi('glucose', 10);
