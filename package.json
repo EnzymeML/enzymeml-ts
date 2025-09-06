@@ -14,9 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "build": "tsc",
-    "example": "npx ts-node example.ts",
-    "example:dev": "npx ts-node --watch example.ts"
+    "build": "tsc"
   },
   "keywords": [],
   "devDependencies": {
