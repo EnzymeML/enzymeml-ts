@@ -85,6 +85,101 @@ export async function fetchPdb(
 }
 
 /**
+ * Search for PDB entries by query string.
+ * 
+ * This function searches the PDB database using the RCSB search API and returns
+ * an array of Protein objects for each matching entry.
+ * 
+ * @param query - The search query string to find PDB entries
+ * @returns A promise that resolves to an array of Protein objects
+ * @throws Error if the search request fails or the API is unavailable
+ * 
+ * @example
+ * ```typescript
+ * // Search for insulin entries
+ * const insulinResults = await searchPdb('insulin');
+ * 
+ * // Search for lysozyme entries
+ * const lysozymeResults = await searchPdb('lysozyme');
+ * ```
+ */
+export async function searchPdb(query: string): Promise<Protein[]> {
+    const url = "https://search.rcsb.org/rcsbsearch/v2/query";
+    const searchQuery = prepareSearch(query);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: searchQuery
+        });
+
+        if (!response.ok) {
+            throw new PDBError(`PDB search API error: ${response.status} ${response.statusText}`);
+        }
+
+        const responseText = await response.text();
+
+        // Handle empty response
+        if (!responseText || responseText.trim() === '') {
+            return [];
+        }
+
+        const data: SearchPDBResponse = JSON.parse(responseText);
+
+        // Handle case where result_set might be undefined or empty
+        if (!data.result_set || data.result_set.length === 0) {
+            return [];
+        }
+
+        const fetchPromises = data.result_set.map((entry) => fetchPdb(entry.identifier));
+        return Promise.all(fetchPromises);
+    } catch (error) {
+        if (error instanceof PDBError) {
+            throw error;
+        }
+        throw new PDBError(
+            `PDB search failed: ${error instanceof Error ? error.message : String(error)}`,
+            error instanceof Error ? error : undefined
+        );
+    }
+}
+
+/**
+ * Helper function to prepare the search query for PDB API.
+ * 
+ * This function creates a JSON query string formatted for the PDB search API.
+ * It constructs a full-text search query that will return PDB entry IDs.
+ * 
+ * @param query - The search term to query the PDB database with
+ * @returns A JSON string formatted for the PDB search API
+ */
+function prepareSearch(query: string): string {
+    return JSON.stringify({
+        "query": {
+            "type": "terminal",
+            "service": "full_text",
+            "parameters": {
+                "value": query
+            }
+        },
+        "return_type": "entry"
+    });
+}
+
+interface SearchPDBResponse {
+    query_id: string;
+    result_type: string;
+    total_count: number;
+    result_set: {
+        identifier: string;
+        score: number;
+    }[];
+}
+
+/**
  * Interface for PDB citation data.
  */
 export interface Citation {
