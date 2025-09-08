@@ -111,13 +111,15 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         schema,
         multiple,
         schemaKey = "data",
-        client = new OpenAI(params.clientOptions),
+        client,
         tools = [
             {
                 type: "web_search",
             }
         ],
     } = params;
+
+    const openaiClient = client || new OpenAI(params.clientOptions);
 
     // Convert input to proper message format, handling BaseInput instances
     const processedInput = input.map((item): MessageInput => {
@@ -137,7 +139,7 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
     }
 
 
-    const stream = client.responses.stream({
+    const stream = openaiClient.responses.stream({
         model,
         input: processedInput as ResponseInput,
         tools,
