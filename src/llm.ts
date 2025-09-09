@@ -36,10 +36,8 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
     multiple?: boolean;
     /** Key name for the structured output in the response (default: "data") */
     schemaKey?: string;
-    /** Optional pre-configured OpenAI client instance */
-    client?: OpenAI;
-    /** Options for creating a new OpenAI client if none provided */
-    clientOptions?: ClientOptions;
+    /** Pre-configured OpenAI client instance */
+    client: OpenAI;
     /** Optional tools for the model to use */
     tools?: Tool[];
 };
@@ -115,8 +113,6 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         tools,
     } = params;
 
-    const openaiClient = client || new OpenAI(params.clientOptions);
-
     // Convert input to proper message format, handling BaseInput instances
     const processedInput = input.map((item): MessageInput => {
         // If it's a BaseInput instance, convert it to a message
@@ -135,7 +131,7 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
     }
 
 
-    const stream = openaiClient.responses.stream({
+    const stream = client.responses.stream({
         model,
         input: processedInput as ResponseInput,
         tools,
