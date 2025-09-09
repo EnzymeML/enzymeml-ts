@@ -135,7 +135,7 @@ export function getFilePurpose(filePath: string): "user_data" | "vision" {
  * @example
  * ```typescript
  * import OpenAI from 'openai';
- * import { uploadFile, extractData, EnzymeMLDocumentSchema, UserQuery, PDFUpload } from 'enzymeml';
+ * import { uploadFile } from 'enzymeml';
  * 
  * const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
  * 
@@ -145,21 +145,9 @@ export function getFilePurpose(filePath: string): "user_data" | "vision" {
  * // Upload an image file
  * const imageFile = await uploadFile({ file: './image.png', client });
  * 
- * // Upload a stream
+ * // Upload a stream with filename for auto-detection
  * const stream = fs.createReadStream('./document.pdf');
  * const streamFile = await uploadFile({ file: stream, filename: 'document.pdf', client });
- * 
- * // Extract data from a file using input classes
- * const pdfUpload = new PDFUpload('./document.pdf', undefined, client);
- * await pdfUpload.upload();
- * const { chunks, final } = extractData({
- *   model: 'gpt-5',
- *   input: [
- *     new UserQuery('Extract the text from the following file'),
- *     pdfUpload
- *   ],
- *   client
- * });
  * ```
  */
 export async function uploadFile(params: UploadFileParams): Promise<UploadResult> {
@@ -226,7 +214,7 @@ export abstract class BaseInput {
      * Performs any necessary upload operations.
      * Override in subclasses that need to upload files.
      */
-    abstract upload(): Promise<void>;
+    abstract upload(client: OpenAI): Promise<void>;
 
     /**
      * Converts the input to OpenAI API compatible message content.
@@ -253,6 +241,19 @@ export abstract class BaseInput {
 
 /**
  * Handles text-based user queries that don't require file uploads.
+ * 
+ * @example
+ * ```typescript
+ * import { UserQuery, extractData } from 'enzymeml';
+ * 
+ * const query = new UserQuery('Extract the metadata from this document');
+ * 
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4o',
+ *   input: [query],
+ *   client
+ * });
+ * ```
  */
 export class UserQuery extends BaseInput {
     /**
@@ -267,7 +268,7 @@ export class UserQuery extends BaseInput {
     /**
      * No upload needed for text queries.
      */
-    async upload(): Promise<void> {
+    async upload(client: OpenAI): Promise<void> {
         // Text queries don't need uploading
         return Promise.resolve();
     }
@@ -295,38 +296,118 @@ export class UserQuery extends BaseInput {
 }
 
 /**
- * Handles image file uploads for vision-based tasks.
+ * Handles system prompts that define the behavior and role of the AI assistant.
+ * Similar to UserQuery but specifically designed for system messages.
+ * 
+ * @example
+ * ```typescript
+ * import { SystemQuery, UserQuery, extractData } from 'enzymeml';
+ * 
+ * const systemPrompt = new SystemQuery('You are an expert at extracting structured data from scientific documents.');
+ * const userQuery = new UserQuery('Extract the metadata from this document');
+ * 
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4o',
+ *   input: [systemPrompt, userQuery],
+ *   client
+ * });
+ * ```
  */
-export class ImageUpload extends BaseInput {
-    private filePath: string;
-    private filename?: string;
-    private client: OpenAI;
-
+export class SystemQuery extends BaseInput {
     /**
-     * @param file - File path (string) or readable stream
-     * @param filename - Optional filename for streams
-     * @param client - OpenAI client instance
+     * @param prompt - The system prompt/message content
      */
     constructor(
-        private file: string | fs.ReadStream,
-        filename: string | undefined,
-        client: OpenAI
+        private prompt: string
     ) {
         super();
-        this.client = client;
-        this.filePath = typeof file === 'string' ? file : '';
-        this.filename = filename;
+    }
+
+    /**
+     * No upload needed for system prompts.
+     */
+    async upload(client: OpenAI): Promise<void> {
+        // System prompts don't need uploading
+        return Promise.resolve();
+    }
+
+    /**
+     * Returns the prompt text as-is.
+     */
+    toInputContent(): InputContent[] | InputContent {
+        return this.prompt;
+    }
+
+    /**
+     * Creates a message object with system role by default.
+     */
+    toMessage(role: "system" | "user" | "assistant" = "system"): MessageInput {
+        return {
+            role,
+            content: this.toInputContent() as InputContent
+        };
+    }
+
+    /**
+     * Gets the original prompt text.
+     */
+    getPrompt(): string {
+        return this.prompt;
+    }
+
+    /**
+     * Updates the prompt text.
+     */
+    setPrompt(prompt: string): void {
+        this.prompt = prompt;
+    }
+}
+
+/**
+ * Handles image file uploads for vision-based tasks.
+ * 
+ * @example
+ * ```typescript
+ * import { ImageUpload, UserQuery, extractData } from 'enzymeml';
+ * 
+ * const imageUpload = new ImageUpload('./image.png');
+ * await imageUpload.upload(client);
+ * 
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4o',
+ *   input: [
+ *     new UserQuery('Describe what you see in this image'),
+ *     imageUpload
+ *   ],
+ *   client
+ * });
+ * ```
+ */
+export class ImageUpload extends BaseInput {
+    private file: string;
+
+    /**
+     * @param file - File path to the image file
+     */
+    constructor(
+        file: string
+    ) {
+        super();
+        if (!isFileTypeSupported(file)) {
+            throw new Error(`File ${file} is not a supported file type. Supported types: ${SUPPORTED_FILE_TYPES.VISION.join(', ')}`);
+        }
+        this.file = file;
     }
 
     /**
      * Uploads the image file to OpenAI with "vision" purpose.
      */
-    async upload(): Promise<void> {
+    async upload(client: OpenAI): Promise<void> {
         const uploadParams: UploadFileParams = {
             file: this.file,
             purpose: "vision",
-            filename: this.filename,
-            client: this.client
+            filename: this.file.split('/').pop(),
+            client: client
         };
 
         this.uploadResult = await uploadFile(uploadParams);
@@ -351,53 +432,68 @@ export class ImageUpload extends BaseInput {
     }
 
     /**
-     * Gets the original file path (if provided as string).
+     * Gets the original file path.
      */
     getFilePath(): string {
-        return this.filePath;
+        return this.file;
     }
 
     /**
      * Gets the filename.
      */
     getFilename(): string | undefined {
-        return this.filename || (this.filePath ? this.filePath.split('/').pop() : undefined);
+        return this.file ? this.file.split('/').pop() : undefined;
     }
 }
 
 /**
  * Handles PDF file uploads for document processing tasks.
+ * 
+ * @example
+ * ```typescript
+ * import { PDFUpload, UserQuery, extractData, EnzymeMLDocumentSchema } from 'enzymeml';
+ * 
+ * const pdfUpload = new PDFUpload('./document.pdf');
+ * await pdfUpload.upload(client);
+ * 
+ * const { chunks, final } = extractData({
+ *   model: 'gpt-4o',
+ *   input: [
+ *     new UserQuery('Extract the metadata from this document'),
+ *     pdfUpload
+ *   ],
+ *   schema: EnzymeMLDocumentSchema,
+ *   schemaKey: 'enzymeml_document',
+ *   client
+ * });
+ * ```
  */
 export class PDFUpload extends BaseInput {
-    private filePath: string;
-    private filename?: string;
-    private client: OpenAI;
+    private file: string;
 
     /**
-     * @param file - File path (string) or readable stream
-     * @param filename - Optional filename for streams  
-     * @param client - OpenAI client instance
+     * @param file - File path to the PDF file
      */
     constructor(
-        private file: string | fs.ReadStream,
-        filename: string | undefined,
-        client: OpenAI
+        file: string,
     ) {
         super();
-        this.client = client;
-        this.filePath = typeof file === 'string' ? file : '';
-        this.filename = filename;
+        // Validate file path
+        if (!isFileTypeSupported(file)) {
+            throw new Error(`File ${file} is not a supported file type. Supported types: ${SUPPORTED_FILE_TYPES.USER_DATA.join(', ')} and ${SUPPORTED_FILE_TYPES.VISION.join(', ')}`);
+        }
+        this.file = file;
     }
 
     /**
      * Uploads the PDF file to OpenAI with "user_data" purpose.
      */
-    async upload(): Promise<void> {
+    async upload(client: OpenAI): Promise<void> {
         const uploadParams: UploadFileParams = {
             file: this.file,
             purpose: "user_data",
-            filename: this.filename,
-            client: this.client
+            filename: this.file.split('/').pop(),
+            client: client
         };
 
         this.uploadResult = await uploadFile(uploadParams);
@@ -418,10 +514,10 @@ export class PDFUpload extends BaseInput {
     }
 
     /**
-     * Gets the original file path (if provided as string).
+     * Gets the original file path.
      */
     getFilePath(): string {
-        return this.filePath;
+        return this.file;
 
     }
 
@@ -429,31 +525,6 @@ export class PDFUpload extends BaseInput {
      * Gets the filename.
      */
     getFilename(): string | undefined {
-        return this.filename || (this.filePath ? this.filePath.split('/').pop() : undefined);
-    }
-}
-
-// =============================================================================
-// Factory Functions
-// =============================================================================
-
-/**
- * Helper function to create appropriate input type from file path based on extension.
- */
-export function createInputFromFile(
-    filePath: string,
-    client: OpenAI
-): ImageUpload | PDFUpload {
-    const ext = filePath.toLowerCase().split('.').pop();
-
-    const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif'];
-    const documentExtensions = ['pdf'];
-
-    if (imageExtensions.includes(ext || '')) {
-        return new ImageUpload(filePath, undefined, client);
-    } else if (documentExtensions.includes(ext || '')) {
-        return new PDFUpload(filePath, undefined, client);
-    } else {
-        throw new Error(`Unsupported file extension: ${ext}. Supported: ${[...imageExtensions, ...documentExtensions].join(', ')}`);
+        return this.file ? this.file.split('/').pop() : undefined;
     }
 }
