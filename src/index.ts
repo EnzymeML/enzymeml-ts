@@ -38,7 +38,7 @@ export {
   ImageUpload,
   PDFUpload,
   UserQuery,
-  createInputFromFile,
+  SystemQuery,
   uploadFile,
   getFilePurpose,
   isFileTypeSupported,
