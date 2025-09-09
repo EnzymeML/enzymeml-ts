@@ -163,7 +163,7 @@ describe('File Type Discrimination System', () => {
         });
 
         test('should auto-detect purpose for file path', async () => {
-            const pdfFile = await uploadFile({ file: './document.pdf' });
+            const pdfFile = await uploadFile({ file: './document.pdf', client: mockClient as any });
 
             expect(mockClient.files.create).toHaveBeenCalledWith({
                 file: mockStream,
@@ -179,7 +179,7 @@ describe('File Type Discrimination System', () => {
                 filename: 'test.png'
             });
 
-            const imageFile = await uploadFile({ file: './image.png' });
+            const imageFile = await uploadFile({ file: './image.png', client: mockClient as any });
 
             expect(mockClient.files.create).toHaveBeenCalledWith({
                 file: mockStream,
@@ -191,7 +191,8 @@ describe('File Type Discrimination System', () => {
         test('should use explicit purpose when provided', async () => {
             await uploadFile({
                 file: './document.pdf',
-                purpose: 'vision' // Override auto-detection
+                purpose: 'vision', // Override auto-detection
+                client: mockClient as any
             });
 
             expect(mockClient.files.create).toHaveBeenCalledWith({
@@ -205,7 +206,8 @@ describe('File Type Discrimination System', () => {
 
             await uploadFile({
                 file: mockStreamInput as any,
-                filename: 'document.pdf'
+                filename: 'document.pdf',
+                client: mockClient as any
             });
 
             expect(mockClient.files.create).toHaveBeenCalledWith({
@@ -219,7 +221,8 @@ describe('File Type Discrimination System', () => {
 
             await uploadFile({
                 file: mockStreamInput as any,
-                purpose: 'vision'
+                purpose: 'vision',
+                client: mockClient as any
             });
 
             expect(mockClient.files.create).toHaveBeenCalledWith({
@@ -229,7 +232,7 @@ describe('File Type Discrimination System', () => {
         });
 
         test('should create file stream for file path input', async () => {
-            await uploadFile({ file: './test.pdf' });
+            await uploadFile({ file: './test.pdf', client: mockClient as any });
 
             expect(mockCreateReadStream).toHaveBeenCalledWith('./test.pdf');
             expect(mockClient.files.create).toHaveBeenCalledWith({
@@ -256,8 +259,22 @@ describe('File Type Discrimination System', () => {
     });
 
     describe('Error handling', () => {
+        let mockClient: any;
+
+        beforeEach(() => {
+            mockClient = {
+                files: {
+                    create: jest.fn().mockResolvedValue({
+                        id: 'file-123',
+                        purpose: 'user_data',
+                        filename: 'test.pdf'
+                    })
+                }
+            };
+        });
+
         test('should throw error for unsupported file extension', async () => {
-            await expect(uploadFile({ file: './unsupported.xyz' }))
+            await expect(uploadFile({ file: './unsupported.xyz', client: mockClient as any }))
                 .rejects
                 .toThrow(/Unsupported file type: \.xyz/);
         });
@@ -265,14 +282,14 @@ describe('File Type Discrimination System', () => {
         test('should throw error for stream without purpose or filename', async () => {
             const mockStream = { pipe: jest.fn() };
 
-            await expect(uploadFile({ file: mockStream as any }))
+            await expect(uploadFile({ file: mockStream as any, client: mockClient as any }))
                 .rejects
                 .toThrow(/When using a stream, either provide "purpose" explicitly or "filename" for auto-detection/);
         });
 
         test('should provide helpful error message with supported types', async () => {
             try {
-                await uploadFile({ file: './video.mp4' });
+                await uploadFile({ file: './video.mp4', client: mockClient as any });
                 fail('Expected error to be thrown');
             } catch (error) {
                 const message = (error as Error).message;
@@ -284,15 +301,16 @@ describe('File Type Discrimination System', () => {
 
         test('should validate file type even when purpose is explicitly provided for paths', async () => {
             // This should still work because we're not validating against explicit purpose
-            const mockClient = {
+            const customMockClient = {
                 files: { create: jest.fn().mockResolvedValue({ id: 'test-123' }) }
             };
-            MockedOpenAI.mockImplementation(() => mockClient);
+            MockedOpenAI.mockImplementation(() => customMockClient);
 
             // This should work - explicit purpose overrides validation
             await expect(uploadFile({
                 file: './test.pdf',
-                purpose: 'vision'
+                purpose: 'vision',
+                client: customMockClient as any
             })).resolves.toBeDefined();
         });
     });

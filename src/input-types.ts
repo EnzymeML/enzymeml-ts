@@ -6,7 +6,7 @@
  * to OpenAI API compatible format.
  */
 
-import OpenAI, { type ClientOptions } from "openai";
+import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 
@@ -58,10 +58,8 @@ export type UploadFileParams = {
      * Required when using streams without explicit purpose.
      */
     filename?: string;
-    /** Optional pre-configured OpenAI client instance */
-    client?: OpenAI;
-    /** Options for creating a new OpenAI client if none provided */
-    clientOptions?: ClientOptions;
+    /** Pre-configured OpenAI client instance */
+    client: OpenAI;
 };
 
 // =============================================================================
@@ -136,20 +134,23 @@ export function getFilePurpose(filePath: string): "user_data" | "vision" {
  * 
  * @example
  * ```typescript
- * import { uploadFile, extractData, EnzymeMLDocumentSchema } from 'enzymeml';
+ * import OpenAI from 'openai';
+ * import { uploadFile, extractData, EnzymeMLDocumentSchema, UserQuery, PDFUpload } from 'enzymeml';
+ * 
+ * const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
  * 
  * // Upload a PDF file
- * const pdfFile = await uploadFile({ file: './document.pdf' });
+ * const pdfFile = await uploadFile({ file: './document.pdf', client });
  * 
  * // Upload an image file
- * const imageFile = await uploadFile({ file: './image.png' });
+ * const imageFile = await uploadFile({ file: './image.png', client });
  * 
  * // Upload a stream
  * const stream = fs.createReadStream('./document.pdf');
- * const streamFile = await uploadFile({ file: stream, filename: 'document.pdf' });
+ * const streamFile = await uploadFile({ file: stream, filename: 'document.pdf', client });
  * 
  * // Extract data from a file using input classes
- * const pdfUpload = new PDFUpload('./document.pdf');
+ * const pdfUpload = new PDFUpload('./document.pdf', undefined, client);
  * await pdfUpload.upload();
  * const { chunks, final } = extractData({
  *   model: 'gpt-5',
@@ -157,6 +158,7 @@ export function getFilePurpose(filePath: string): "user_data" | "vision" {
  *     new UserQuery('Extract the text from the following file'),
  *     pdfUpload
  *   ],
+ *   client
  * });
  * ```
  */
@@ -165,7 +167,7 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
         file,
         purpose,
         filename,
-        client = new OpenAI(params.clientOptions),
+        client,
     } = params;
 
     // Determine the file purpose
@@ -216,12 +218,9 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
  * Provides a common interface for uploading content and converting to OpenAI API format.
  */
 export abstract class BaseInput {
-    protected client: OpenAI;
     protected uploadResult?: UploadResult;
 
-    constructor(clientOptions?: ClientOptions) {
-        this.client = new OpenAI(clientOptions);
-    }
+    constructor() { }
 
     /**
      * Performs any necessary upload operations.
@@ -258,13 +257,11 @@ export abstract class BaseInput {
 export class UserQuery extends BaseInput {
     /**
      * @param query - The text query/message content
-     * @param clientOptions - Optional OpenAI client options  
      */
     constructor(
-        private query: string,
-        clientOptions?: ClientOptions
+        private query: string
     ) {
-        super(clientOptions);
+        super();
     }
 
     /**
@@ -303,18 +300,20 @@ export class UserQuery extends BaseInput {
 export class ImageUpload extends BaseInput {
     private filePath: string;
     private filename?: string;
+    private client: OpenAI;
 
     /**
      * @param file - File path (string) or readable stream
      * @param filename - Optional filename for streams
-     * @param clientOptions - Optional OpenAI client options
+     * @param client - OpenAI client instance
      */
     constructor(
         private file: string | fs.ReadStream,
-        filename?: string,
-        clientOptions?: ClientOptions
+        filename: string | undefined,
+        client: OpenAI
     ) {
-        super(clientOptions);
+        super();
+        this.client = client;
         this.filePath = typeof file === 'string' ? file : '';
         this.filename = filename;
     }
@@ -372,18 +371,20 @@ export class ImageUpload extends BaseInput {
 export class PDFUpload extends BaseInput {
     private filePath: string;
     private filename?: string;
+    private client: OpenAI;
 
     /**
      * @param file - File path (string) or readable stream
      * @param filename - Optional filename for streams  
-     * @param clientOptions - Optional OpenAI client options
+     * @param client - OpenAI client instance
      */
     constructor(
         private file: string | fs.ReadStream,
-        filename?: string,
-        clientOptions?: ClientOptions
+        filename: string | undefined,
+        client: OpenAI
     ) {
-        super(clientOptions);
+        super();
+        this.client = client;
         this.filePath = typeof file === 'string' ? file : '';
         this.filename = filename;
     }
@@ -441,7 +442,7 @@ export class PDFUpload extends BaseInput {
  */
 export function createInputFromFile(
     filePath: string,
-    clientOptions?: ClientOptions
+    client: OpenAI
 ): ImageUpload | PDFUpload {
     const ext = filePath.toLowerCase().split('.').pop();
 
@@ -449,9 +450,9 @@ export function createInputFromFile(
     const documentExtensions = ['pdf'];
 
     if (imageExtensions.includes(ext || '')) {
-        return new ImageUpload(filePath, undefined, clientOptions);
+        return new ImageUpload(filePath, undefined, client);
     } else if (documentExtensions.includes(ext || '')) {
-        return new PDFUpload(filePath, undefined, clientOptions);
+        return new PDFUpload(filePath, undefined, client);
     } else {
         throw new Error(`Unsupported file extension: ${ext}. Supported: ${[...imageExtensions, ...documentExtensions].join(', ')}`);
     }

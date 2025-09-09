@@ -6,10 +6,9 @@
  * streaming of text, refusals, and errors from the OpenAI responses API.
  */
 
-import OpenAI, { type ClientOptions } from "openai";
+import OpenAI from "openai";
 import { z, type ZodTypeAny } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { ResponseInput, Tool } from "openai/resources/responses/responses";
 import type { BaseInput, MessageInput } from "./input-types.js";
 
 /**
@@ -36,12 +35,10 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
     multiple?: boolean;
     /** Key name for the structured output in the response (default: "data") */
     schemaKey?: string;
-    /** Optional pre-configured OpenAI client instance */
-    client?: OpenAI;
-    /** Options for creating a new OpenAI client if none provided */
-    clientOptions?: ClientOptions;
+    /** Pre-configured OpenAI client instance */
+    client: OpenAI;
     /** Optional tools for the model to use */
-    tools?: Tool[];
+    tools?: any[];
 };
 
 /**
@@ -112,14 +109,8 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         multiple,
         schemaKey = "data",
         client,
-        tools = [
-            {
-                type: "web_search",
-            }
-        ],
+        tools,
     } = params;
-
-    const openaiClient = client || new OpenAI(params.clientOptions);
 
     // Convert input to proper message format, handling BaseInput instances
     const processedInput = input.map((item): MessageInput => {
@@ -139,9 +130,9 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
     }
 
 
-    const stream = openaiClient.responses.stream({
+    const stream = client.responses.stream({
         model,
-        input: processedInput as ResponseInput,
+        input: processedInput as any,
         tools,
         ...(schemaInput
             ? { text: { format: zodTextFormat(schemaInput, schemaKey) } }
