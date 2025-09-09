@@ -93,14 +93,21 @@ enzmldoc.proteins.push(protein);
 The library includes OpenAI streaming utilities for AI-powered data generation and analysis:
 
 ```typescript
-import { extractData, EnzymeMLDocumentSchema } from 'enzymeml';
+import OpenAI from 'openai';
+import { extractData, EnzymeMLDocumentSchema, UserQuery } from 'enzymeml';
+
+// Create OpenAI client
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Generate structured EnzymeML documents with AI
 const { chunks, final } = extractData({
-  model: 'gpt-4',
-  input: [{ role: 'user', content: 'Create an EnzymeML document for glucose metabolism' }],
+  model: 'gpt-4o',
+  input: [
+    new UserQuery('Create an EnzymeML document for glucose metabolism'),
+  ],
   schema: EnzymeMLDocumentSchema,
-  schemaKey: 'enzymeml_document'
+  schemaKey: 'enzymeml_document',
+  client: client,
 });
 
 // Stream the response
@@ -111,7 +118,7 @@ for await (const chunk of chunks) {
 }
 
 // Get the final validated document
-const document = await final;
+const document = await final.output_parsed;
 ```
 
 ### Type-safe interface
