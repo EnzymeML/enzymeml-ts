@@ -54,25 +54,34 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  * 
  * @example
  * ```typescript
- * // Basic text streaming
+ * import { SystemQuery, UserQuery, PDFUpload } from 'enzymeml';
+ * import { z } from 'zod';
+ * 
+ * // Basic text streaming with SystemQuery and UserQuery
  * const { chunks, final } = extractData({
  *   model: 'gpt-4',
- *   input: [{ role: 'user', content: 'Tell me a joke' }]
+ *   input: [
+ *     new SystemQuery('You are a helpful assistant that tells funny jokes.'),
+ *     new UserQuery('Tell me a joke')
+ *   ]
  * });
  * 
- * // Using input type classes
- * const userQuery = new UserQuery('Tell me a joke');
+ * // Mixed input types (raw messages and input classes)
  * const { chunks, final } = extractData({
  *   model: 'gpt-4',
- *   input: [userQuery]
+ *   input: [
+ *     { role: 'system', content: 'You are a helpful assistant.' },
+ *     new UserQuery('Tell me a joke')
+ *   ]
  * });
  * 
- * // With file upload
- * const pdfUpload = new PDFUpload('./document.pdf');
+ * // With file upload and system prompt
+ * const pdfUpload = new PDFUpload('./document.pdf', undefined, client);
  * await pdfUpload.upload(); // Upload the file first
  * const { chunks, final } = extractData({
  *   model: 'gpt-4',
  *   input: [
+ *     new SystemQuery('You are an expert document analyzer.'),
  *     new UserQuery('Analyze this document'),
  *     pdfUpload
  *   ]
@@ -85,7 +94,7 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  *   }
  * }
  * 
- * // With structured output
+ * // With structured output and system prompt
  * const schema = z.object({
  *   name: z.string(),
  *   age: z.number()
@@ -93,7 +102,10 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  * 
  * const { chunks, final } = extractData({
  *   model: 'gpt-4',
- *   input: [{ role: 'user', content: 'Generate a person' }],
+ *   input: [
+ *     new SystemQuery('Generate realistic person data as requested.'),
+ *     new UserQuery('Generate a person')
+ *   ],
  *   schema,
  *   schemaKey: 'person'
  * });
