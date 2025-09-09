@@ -94,16 +94,26 @@ The library includes OpenAI streaming utilities for AI-powered data generation a
 
 ```typescript
 import OpenAI from 'openai';
-import { extractData, EnzymeMLDocumentSchema, UserQuery } from 'enzymeml';
+import { extractData, EnzymeMLDocumentSchema, UserQuery, PDFUpload, ImageUpload } from 'enzymeml';
 
 // Create OpenAI client
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Upload files
+const pdfUpload = new PDFUpload('./document.pdf');
+await pdfUpload.upload();
+
+const imageUpload = new ImageUpload('./image.png');
+await imageUpload.upload();
 
 // Generate structured EnzymeML documents with AI
 const { chunks, final } = extractData({
   model: 'gpt-4o',
   input: [
-    new UserQuery('Create an EnzymeML document for glucose metabolism'),
+    new SystemQuery('You are an expert at extracting structured data from scientific documents.'),
+    new UserQuery('Extract the metadata from the following documents and images'),
+    pdfUpload,
+    imageUpload,
   ],
   schema: EnzymeMLDocumentSchema,
   schemaKey: 'enzymeml_document',
