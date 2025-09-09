@@ -30,16 +30,21 @@ jest.mock('fs', () => ({
 
 // Mock OpenAI with proper file creation response
 const mockFileCreate = jest.fn();
+const mockOpenAI = {
+    files: {
+        create: mockFileCreate
+    }
+};
 jest.mock('openai', () => {
     return {
         __esModule: true,
-        default: jest.fn().mockImplementation(() => ({
-            files: {
-                create: mockFileCreate
-            }
-        }))
+        default: jest.fn().mockImplementation(() => mockOpenAI)
     };
 });
+
+// Import OpenAI after mocking
+import OpenAI from 'openai';
+const mockClient = new OpenAI();
 
 describe('BaseInput', () => {
     class TestInput extends BaseInput {
@@ -52,7 +57,7 @@ describe('BaseInput', () => {
         }
     }
 
-    it('should create instance with default client', () => {
+    it('should create instance without client', () => {
         const input = new TestInput();
         expect(input).toBeInstanceOf(BaseInput);
     });
@@ -89,14 +94,14 @@ describe('ImageUpload', () => {
     });
 
     it('should create instance with file path', () => {
-        const imageUpload = new ImageUpload('./test.png');
+        const imageUpload = new ImageUpload('./test.png', undefined, mockClient);
         expect(imageUpload.getFilePath()).toBe('./test.png');
         expect(imageUpload.getFilename()).toBe('test.png');
     });
 
     it('should create instance with stream and filename', () => {
         const mockStream = {} as fs.ReadStream;
-        const imageUpload = new ImageUpload(mockStream, 'image.jpg');
+        const imageUpload = new ImageUpload(mockStream, 'image.jpg', mockClient);
         expect(imageUpload.getFilePath()).toBe('');
         expect(imageUpload.getFilename()).toBe('image.jpg');
     });
@@ -113,7 +118,7 @@ describe('ImageUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const imageUpload = new ImageUpload('./test.png');
+        const imageUpload = new ImageUpload('./test.png', undefined, mockClient);
         await imageUpload.upload();
 
         expect(mockFileCreate).toHaveBeenCalledWith({
@@ -136,7 +141,7 @@ describe('ImageUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const imageUpload = new ImageUpload('./image.jpg');
+        const imageUpload = new ImageUpload('./image.jpg', undefined, mockClient);
         await imageUpload.upload();
 
         const content = imageUpload.toInputContent();
@@ -149,7 +154,7 @@ describe('ImageUpload', () => {
     });
 
     it('should throw error when converting without upload', () => {
-        const imageUpload = new ImageUpload('./test.png');
+        const imageUpload = new ImageUpload('./test.png', undefined, mockClient);
 
         expect(() => imageUpload.toInputContent()).toThrow(
             'File must be uploaded before converting to input content. Call upload() first.'
@@ -168,7 +173,7 @@ describe('ImageUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const imageUpload = new ImageUpload('./photo.png');
+        const imageUpload = new ImageUpload('./photo.png', undefined, mockClient);
         await imageUpload.upload();
 
         const message = imageUpload.toMessage();
@@ -190,14 +195,14 @@ describe('PDFUpload', () => {
     });
 
     it('should create instance with file path', () => {
-        const pdfUpload = new PDFUpload('./document.pdf');
+        const pdfUpload = new PDFUpload('./document.pdf', undefined, mockClient);
         expect(pdfUpload.getFilePath()).toBe('./document.pdf');
         expect(pdfUpload.getFilename()).toBe('document.pdf');
     });
 
     it('should create instance with stream and filename', () => {
         const mockStream = {} as fs.ReadStream;
-        const pdfUpload = new PDFUpload(mockStream, 'report.pdf');
+        const pdfUpload = new PDFUpload(mockStream, 'report.pdf', mockClient);
         expect(pdfUpload.getFilePath()).toBe('');
         expect(pdfUpload.getFilename()).toBe('report.pdf');
     });
@@ -214,7 +219,7 @@ describe('PDFUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const pdfUpload = new PDFUpload('./document.pdf');
+        const pdfUpload = new PDFUpload('./document.pdf', undefined, mockClient);
         await pdfUpload.upload();
 
         expect(mockFileCreate).toHaveBeenCalledWith({
@@ -237,7 +242,7 @@ describe('PDFUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const pdfUpload = new PDFUpload('./report.pdf');
+        const pdfUpload = new PDFUpload('./report.pdf', undefined, mockClient);
         await pdfUpload.upload();
 
         const content = pdfUpload.toInputContent();
@@ -248,7 +253,7 @@ describe('PDFUpload', () => {
     });
 
     it('should throw error when converting without upload', () => {
-        const pdfUpload = new PDFUpload('./document.pdf');
+        const pdfUpload = new PDFUpload('./document.pdf', undefined, mockClient);
 
         expect(() => pdfUpload.toInputContent()).toThrow(
             'File must be uploaded before converting to input content. Call upload() first.'
@@ -267,7 +272,7 @@ describe('PDFUpload', () => {
 
         (mockFileCreate as any).mockResolvedValue(mockUploadResult);
 
-        const pdfUpload = new PDFUpload('./manual.pdf');
+        const pdfUpload = new PDFUpload('./manual.pdf', undefined, mockClient);
         await pdfUpload.upload();
 
         const message = pdfUpload.toMessage("system");
@@ -330,45 +335,45 @@ describe('createInputFromFile', () => {
         const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif'];
 
         imageExtensions.forEach(ext => {
-            const input = createInputFromFile(`test.${ext}`);
+            const input = createInputFromFile(`test.${ext}`, mockClient);
             expect(input).toBeInstanceOf(ImageUpload);
             expect(input.getFilePath()).toBe(`test.${ext}`);
         });
     });
 
     it('should create PDFUpload for pdf extension', () => {
-        const input = createInputFromFile('document.pdf');
+        const input = createInputFromFile('document.pdf', mockClient);
         expect(input).toBeInstanceOf(PDFUpload);
         expect(input.getFilePath()).toBe('document.pdf');
     });
 
     it('should handle uppercase extensions', () => {
-        const imageInput = createInputFromFile('IMAGE.PNG');
+        const imageInput = createInputFromFile('IMAGE.PNG', mockClient);
         expect(imageInput).toBeInstanceOf(ImageUpload);
 
-        const pdfInput = createInputFromFile('DOCUMENT.PDF');
+        const pdfInput = createInputFromFile('DOCUMENT.PDF', mockClient);
         expect(pdfInput).toBeInstanceOf(PDFUpload);
     });
 
     it('should throw error for unsupported extensions', () => {
-        expect(() => createInputFromFile('document.txt')).toThrow(
+        expect(() => createInputFromFile('document.txt', mockClient)).toThrow(
             'Unsupported file extension: txt. Supported: png, jpg, jpeg, gif, webp, bmp, tiff, tif, pdf'
         );
 
-        expect(() => createInputFromFile('file.docx')).toThrow(
+        expect(() => createInputFromFile('file.docx', mockClient)).toThrow(
             'Unsupported file extension: docx'
         );
     });
 
     it('should handle files without extension', () => {
-        expect(() => createInputFromFile('filename')).toThrow(
+        expect(() => createInputFromFile('filename', mockClient)).toThrow(
             'Unsupported file extension: filename'
         );
     });
 
     it('should pass client options to created instances', () => {
         const clientOptions = { apiKey: 'test-key' };
-        const input = createInputFromFile('test.png', clientOptions);
+        const input = createInputFromFile('test.png', mockClient);
 
         expect(input).toBeInstanceOf(ImageUpload);
         // Note: We can't easily test that clientOptions were passed without exposing internals
