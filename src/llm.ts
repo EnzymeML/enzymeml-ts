@@ -112,11 +112,7 @@ export function extractData<TSchema extends ZodTypeAny | undefined>(
         multiple,
         schemaKey = "data",
         client,
-        tools = [
-            {
-                type: "web_search",
-            }
-        ],
+        tools,
     } = params;
 
     const openaiClient = client || new OpenAI(params.clientOptions);
