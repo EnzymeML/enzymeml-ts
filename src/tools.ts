@@ -6,11 +6,13 @@
  * to enable AI assistants to search for molecular and protein information.
  */
 
-import { Tool } from "openai/resources/responses/responses";
+import { FunctionTool } from "openai/resources/responses/responses";
 import { searchChebi } from "./fetcher/chebi";
 import { searchPdb } from "./fetcher/pdb";
 import { searchPubChem } from "./fetcher/pubchem";
 import { searchUniprot } from "./fetcher/uniprot";
+import { Protein, SmallMolecule } from "./v2";
+import { ToolDefinition } from "./llm";
 
 /**
  * OpenAI function specification for the database search tool.
@@ -24,7 +26,7 @@ import { searchUniprot } from "./fetcher/uniprot";
  * - pubchem: PubChem chemical database
  * - uniprot: UniProt protein database
  */
-export const SearchDatabaseToolSpecs: Tool = {
+const SearchDatabaseToolSpecs: FunctionTool = {
     type: "function",
     name: "search_databases",
     description: "Search for specific molecular and protein information that is mentioned in the provided document. Use this tool to extract information from the databases supported by this tool. Supports ChEBI (small molecules), PDB (protein structures), PubChem (chemical database), and UniProt (protein sequences).",
@@ -80,30 +82,30 @@ export const SearchDatabaseToolSpecs: Tool = {
  * console.log(proteinResults);
  * ```
  */
-export const SearchDatabaseTool = async (
+const SearchDatabaseToolFunction = async (
     {
         databases,
         query,
     }: {
         databases: string[],
         query: string,
-    }) => {
-    let responses: any[] = [];
+    }): Promise<(SmallMolecule | Protein)[]> => {
+    let responses: (SmallMolecule | Protein)[] = [];
 
     for (const database of databases) {
         switch (database) {
             case "chebi":
-                responses.push(await searchChebi(query, 5));
+                responses.push(...await searchChebi(query, 5));
                 break;
             case "pdb":
                 const pdbResults = (await searchPdb(query)).slice(0, 5);
-                responses.push(pdbResults);
+                responses.push(...pdbResults);
                 break;
             case "pubchem":
-                responses.push(await searchPubChem(query, 5));
+                responses.push(...await searchPubChem(query, 5));
                 break;
             case "uniprot":
-                responses.push(await searchUniprot(query, 5));
+                responses.push(...await searchUniprot(query, 5));
                 break;
             default:
                 throw new Error(`Database ${database} not supported`);
@@ -111,4 +113,9 @@ export const SearchDatabaseTool = async (
     }
 
     return responses;
+}
+
+export const SearchDatabaseTool: ToolDefinition = {
+    specs: SearchDatabaseToolSpecs,
+    fun: SearchDatabaseToolFunction,
 }

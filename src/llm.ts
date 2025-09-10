@@ -17,8 +17,7 @@ import OpenAI from "openai";
 import { z, type ZodTypeAny } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { SystemQuery, type BaseInput, type MessageInput } from "./input-types";
-import { ResponseOutputItem, Tool } from "openai/resources/responses/responses";
-import { SearchDatabaseTool } from "./tools";
+import { FunctionTool, ResponseOutputItem } from "openai/resources/responses/responses";
 
 import PQueue from "p-queue";
 import pRetry from "p-retry";
@@ -87,6 +86,11 @@ export type ToolChainEvent =
     | { type: "outputs_appended"; meta: ToolChainMeta; payload: { count: number; elapsedMs: number } }
     | { type: "chain_complete"; meta: ToolChainMeta; payload: { outputSize: number } };
 
+export type ToolDefinition = {
+    specs: FunctionTool;
+    fun: (args: any) => Promise<any | any[]>;
+};
+
 /**
  * Parameters for creating a streaming response from OpenAI.
  * 
@@ -106,7 +110,7 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
     /** Pre-configured OpenAI client instance */
     client: OpenAI;
     /** Optional tools for the model to use */
-    tools?: Tool[];
+    tools?: ToolDefinition[];
     /** Optional progress callback for tool-chain state */
     onToolChainEvent?: (e: ToolChainEvent) => void;
 };
@@ -236,8 +240,16 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
 
     if (tools && tools.length > 0) {
         // *** BLOCKING TOOL CHAIN: resolve any tool calls before final stream ***
+        const toolSpecs = tools.map((tool) => tool.specs);
+
+        // Create a map of tool names to tool functions
+        let handlers: Record<string, (args: object) => Promise<any>> = {};
+        for (const tool of tools) {
+            handlers[tool.specs.name] = tool.fun;
+        }
+
         processedInput = await runToolChain(
-            tools,
+            toolSpecs,
             processedInput,
             client,
             model,
@@ -247,9 +259,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
                 toolRetries: 2,
                 depth: 1,
                 totalDepth: 1,
-                handlers: {
-                    search_databases: SearchDatabaseTool,
-                },
+                handlers,
             },
             onToolChainEvent
         );
@@ -353,7 +363,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
  * ```
  */
 export async function runToolChain(
-    tools: Tool[],
+    tools: FunctionTool[],
     baseInput: any[],
     client: OpenAI,
     model: string,
@@ -492,7 +502,7 @@ async function planToolCalls(
     client: OpenAI,
     model: string,
     input: any[],
-    tools: Tool[],
+    tools: FunctionTool[],
 ): Promise<Extract<ResponseOutputItem, { type: "function_call" }>[]> {
     const resp = await client.responses.create({
         model,
@@ -616,7 +626,7 @@ async function executeSingleTool(
     onEvent?.({ type: "tool_start", meta: meta(), payload: { ...ref, args } });
 
     // Get handler
-    const handler = handlerFor(call.name) ?? (call.name === "search_databases" ? SearchDatabaseTool : undefined);
+    const handler = handlerFor(call.name);
     if (!handler) {
         const error = `Unknown tool: ${call.name}`;
         onEvent?.({
