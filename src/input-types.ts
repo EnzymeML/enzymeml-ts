@@ -9,10 +9,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-
-// =============================================================================
-// Type Definitions and Interfaces
-// =============================================================================
+import { PDFDocument } from "pdf-lib";
 
 /**
  * Represents the result of an OpenAI file upload
@@ -62,10 +59,6 @@ export type UploadFileParams = {
     client: OpenAI;
 };
 
-// =============================================================================
-// Constants
-// =============================================================================
-
 /**
  * Supported file types for OpenAI uploads
  */
@@ -75,10 +68,6 @@ export const SUPPORTED_FILE_TYPES = {
     // Vision files (images)  
     VISION: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif']
 } as const;
-
-// =============================================================================
-// Utility Functions
-// =============================================================================
 
 /**
  * Checks if a file type is supported by OpenAI
@@ -114,10 +103,6 @@ export function getFilePurpose(filePath: string): "user_data" | "vision" {
         `Supported types: ${allSupported.join(', ')}`
     );
 }
-
-// =============================================================================
-// Core Upload Functionality
-// =============================================================================
 
 /**
  * Uploads a file using OpenAI's API with automatic file type detection.
@@ -196,10 +181,6 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
         purpose: filePurpose,
     });
 }
-
-// =============================================================================
-// Input Classes
-// =============================================================================
 
 /**
  * Abstract base class for all input types.
@@ -447,14 +428,19 @@ export class ImageUpload extends BaseInput {
 }
 
 /**
- * Handles PDF file uploads for document processing tasks.
+ * Handles PDF file uploads for document processing tasks with optional page selection.
  * 
  * @example
  * ```typescript
  * import { PDFUpload, UserQuery, extractData, EnzymeMLDocumentSchema } from 'enzymeml';
  * 
+ * // Upload entire PDF
  * const pdfUpload = new PDFUpload('./document.pdf');
  * await pdfUpload.upload(client);
+ * 
+ * // Upload only specific pages (1-indexed)
+ * const pdfUploadPages = new PDFUpload('./document.pdf', [1, 3, 5]);
+ * await pdfUploadPages.upload(client);
  * 
  * const { chunks, final } = extractData({
  *   model: 'gpt-4o',
@@ -466,16 +452,23 @@ export class ImageUpload extends BaseInput {
  *   schemaKey: 'enzymeml_document',
  *   client
  * });
+ * 
+ * // Clean up any temporary files
+ * pdfUpload.cleanup();
  * ```
  */
 export class PDFUpload extends BaseInput {
     private file: string;
+    private pages?: number[];
+    private processedFile?: string;
 
     /**
      * @param file - File path to the PDF file
+     * @param pages - Optional array of page numbers to extract (1-indexed)
      */
     constructor(
         file: string,
+        pages?: number[]
     ) {
         super();
         // Validate file path
@@ -483,16 +476,72 @@ export class PDFUpload extends BaseInput {
             throw new Error(`File ${file} is not a supported file type. Supported types: ${SUPPORTED_FILE_TYPES.USER_DATA.join(', ')} and ${SUPPORTED_FILE_TYPES.VISION.join(', ')}`);
         }
         this.file = file;
+        this.pages = pages;
     }
 
     /**
-     * Uploads the PDF file to OpenAI with "user_data" purpose.
+     * Processes the PDF to extract specific pages if specified.
+     * @returns Path to the file to upload (original or processed)
+     */
+    private async processPDF(): Promise<string | fs.ReadStream> {
+        if (!this.pages || this.pages.length === 0) {
+            // No page selection, return original file path
+            return this.file;
+        }
+
+        try {
+            // Read the original PDF
+            const existingPdfBytes = fs.readFileSync(this.file);
+            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+
+            // Get total page count for validation
+            const totalPages = pdfDoc.getPageCount();
+
+            // Validate page numbers
+            const invalidPages = this.pages.filter(p => p < 1 || p > totalPages);
+            if (invalidPages.length > 0) {
+                throw new Error(`Invalid page numbers: ${invalidPages.join(', ')}. PDF has ${totalPages} pages.`);
+            }
+
+            // Create a new PDF document
+            const newPdfDoc = await PDFDocument.create();
+
+            // Copy the specified pages (convert from 1-indexed to 0-indexed)
+            const pageIndices = this.pages.map(p => p - 1);
+            const copiedPages = await newPdfDoc.copyPages(pdfDoc, pageIndices);
+
+            // Add the pages to the new document
+            copiedPages.forEach((page) => newPdfDoc.addPage(page));
+
+            // Save the new PDF
+            const pdfBytes = await newPdfDoc.save();
+
+            // Create a ReadStream from the PDF bytes
+            const { Readable } = require('stream');
+            const stream = new Readable();
+            stream.push(pdfBytes);
+            stream.push(null); // End the stream
+
+            // Add the name property that OpenAI requires for Uploadable objects
+            (stream as any).name = `processed_${path.basename(this.file)}`;
+
+            return stream as fs.ReadStream;
+        } catch (error) {
+            throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Uploads the PDF file (or processed version) to OpenAI with "user_data" purpose.
      */
     async upload(client: OpenAI): Promise<void> {
+        // Process the PDF if page selection is specified
+        const fileToUpload = await this.processPDF();
+
         const uploadParams: UploadFileParams = {
-            file: this.file,
+            file: fileToUpload,
             purpose: "user_data",
-            filename: this.file.split('/').pop(),
+            filename: path.basename(this.file),
             client: client
         };
 
@@ -526,5 +575,34 @@ export class PDFUpload extends BaseInput {
      */
     getFilename(): string | undefined {
         return this.file ? this.file.split('/').pop() : undefined;
+    }
+
+    /**
+     * Gets the selected page numbers (if any).
+     */
+    getSelectedPages(): number[] | undefined {
+        return this.pages;
+    }
+
+    /**
+     * Checks if the upload will use page selection.
+     */
+    hasPageSelection(): boolean {
+        return this.pages !== undefined && this.pages.length > 0;
+    }
+
+    /**
+     * Clean up any temporary files created during processing.
+     * Should be called after upload is complete to free up disk space.
+     */
+    cleanup(): void {
+        if (this.processedFile && this.processedFile !== this.file) {
+            try {
+                fs.unlinkSync(this.processedFile);
+                this.processedFile = undefined;
+            } catch (error) {
+                console.warn(`Failed to clean up temporary file ${this.processedFile}:`, error);
+            }
+        }
     }
 }
