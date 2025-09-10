@@ -213,7 +213,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
         multiple,
         schemaKey = "data",
         client,
-        tools = [SearchDatabaseToolSpecs],
+        tools,
         onToolChainEvent,
     } = params;
 
