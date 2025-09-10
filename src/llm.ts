@@ -498,6 +498,7 @@ async function planToolCalls(
         model,
         input,
         tools,
+        tool_choice: "required",
         temperature: REASONING_MODELS.includes(model) ? undefined : 0,
     });
 
