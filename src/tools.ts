@@ -2,7 +2,7 @@
  * Database search tools for EnzymeML.
  * 
  * This module provides tools for searching various biological and chemical databases
- * including ChEBI, PDB, and PubChem. These tools can be used with LLM function calling
+ * including ChEBI, PDB, PubChem, and UniProt. These tools can be used with LLM function calling
  * to enable AI assistants to search for molecular and protein information.
  */
 
@@ -27,7 +27,7 @@ import { searchUniprot } from "./fetcher/uniprot";
 export const SearchDatabaseToolSpecs: Tool = {
     type: "function",
     name: "search_databases",
-    description: "Search for specific molecular and protein information that is mentioned in the provided document. Use this tool to extract information from the databases supported by this tool. Supports ChEBI (small molecules), PDB (protein structures), and UniProt (protein sequences).",
+    description: "Search for specific molecular and protein information that is mentioned in the provided document. Use this tool to extract information from the databases supported by this tool. Supports ChEBI (small molecules), PDB (protein structures), PubChem (chemical database), and UniProt (protein sequences).",
     strict: true,
     parameters: {
         type: "object",
@@ -36,9 +36,9 @@ export const SearchDatabaseToolSpecs: Tool = {
                 type: "array",
                 items: {
                     type: "string",
-                    enum: ["chebi", "pdb", "uniprot"],
+                    enum: ["chebi", "pdb", "pubchem", "uniprot"],
                 },
-                description: "The database to search in. Supports ChEBI (small molecules), PDB (protein structures), and UniProt (protein sequences).",
+                description: "The databases to search in. Supports ChEBI (small molecules), PDB (protein structures), PubChem (chemical database), and UniProt (protein sequences).",
             },
             query: {
                 type: "string",
@@ -52,24 +52,31 @@ export const SearchDatabaseToolSpecs: Tool = {
 }
 
 /**
- * Execute a database search based on the specified parameters.
+ * Execute database searches based on the specified parameters.
  * 
- * This function routes search queries to the appropriate database fetcher
- * based on the database parameter and returns the results as a JSON string.
+ * This function routes search queries to the appropriate database fetchers
+ * based on the databases parameter and returns the combined results as an array.
+ * Each database is searched with a limit of 5 results.
  * 
- * @param database - The database to search in (chebi, pdb, pubchem)
+ * @param databases - Array of databases to search in (chebi, pdb, pubchem, uniprot)
  * @param query - The search query string
- * @returns JSON string containing the search results
- * @throws Error if the specified database is not supported
+ * @returns Array containing the search results from all specified databases
+ * @throws Error if any of the specified databases is not supported
  * 
  * @example
  * ```typescript
- * // Search for glucose in ChEBI
- * const results = await SearchDatabaseTool({ database: "chebi", query: "glucose", limit: 5 });
+ * // Search for glucose in ChEBI and PubChem
+ * const results = await SearchDatabaseTool({ 
+ *   databases: ["chebi", "pubchem"], 
+ *   query: "glucose" 
+ * });
  * console.log(results);
  * 
- * // Search for insulin in PDB
- * const proteinResults = await SearchDatabaseTool({ database: "pdb", query: "insulin", limit: 10 });
+ * // Search for insulin in PDB and UniProt
+ * const proteinResults = await SearchDatabaseTool({ 
+ *   databases: ["pdb", "uniprot"], 
+ *   query: "insulin" 
+ * });
  * console.log(proteinResults);
  * ```
  */
