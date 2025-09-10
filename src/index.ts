@@ -29,7 +29,8 @@ export {
 export {
   extractData,
   type CreateStreamParams,
-  type StreamItem
+  type StreamItem,
+  type ToolChainEvent
 } from './llm';
 
 // Input type classes and file upload utilities
