@@ -30,7 +30,8 @@ export {
   extractData,
   type CreateStreamParams,
   type StreamItem,
-  type ToolChainEvent
+  type ToolChainEvent,
+  type ToolDefinition,
 } from './llm';
 
 // LLM Tools
