@@ -86,6 +86,9 @@ export type ToolChainEvent =
     | { type: "outputs_appended"; meta: ToolChainMeta; payload: { count: number; elapsedMs: number } }
     | { type: "chain_complete"; meta: ToolChainMeta; payload: { outputSize: number } };
 
+/**
+ * Represents a tool definition for the model to use.
+ */
 export type ToolDefinition = {
     specs: FunctionTool;
     fun: (args: any) => Promise<any | any[]>;
