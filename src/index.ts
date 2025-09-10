@@ -33,6 +33,12 @@ export {
   type ToolChainEvent
 } from './llm';
 
+// LLM Tools
+export {
+  SearchDatabaseTool,
+  SearchDatabaseToolSpecs,
+} from './tools';
+
 // Input type classes and file upload utilities
 export {
   BaseInput,
