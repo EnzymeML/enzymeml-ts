@@ -29,8 +29,14 @@ export {
 export {
   extractData,
   type CreateStreamParams,
-  type StreamItem
+  type StreamItem,
+  type ToolChainEvent
 } from './llm';
+
+// LLM Tools
+export {
+  SearchDatabaseTool,
+} from './tools';
 
 // Input type classes and file upload utilities
 export {
