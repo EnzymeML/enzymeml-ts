@@ -16,9 +16,9 @@
 import OpenAI from "openai";
 import { z, type ZodTypeAny } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { SystemQuery, UserQuery, type BaseInput, type MessageInput } from "./input-types";
+import { SystemQuery, type BaseInput, type MessageInput } from "./input-types";
 import { ResponseOutputItem, Tool } from "openai/resources/responses/responses";
-import { SearchDatabaseTool, SearchDatabaseToolSpecs } from "./tools";
+import { SearchDatabaseTool } from "./tools";
 
 import PQueue from "p-queue";
 import pRetry from "p-retry";
