@@ -36,7 +36,6 @@ export {
 // LLM Tools
 export {
   SearchDatabaseTool,
-  SearchDatabaseToolSpecs,
 } from './tools';
 
 // Input type classes and file upload utilities
