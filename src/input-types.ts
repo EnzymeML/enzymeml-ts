@@ -10,6 +10,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
+import { Readable } from "stream";
 
 /**
  * Represents the result of an OpenAI file upload
@@ -452,9 +453,6 @@ export class ImageUpload extends BaseInput {
  *   schemaKey: 'enzymeml_document',
  *   client
  * });
- * 
- * // Clean up any temporary files
- * pdfUpload.cleanup();
  * ```
  */
 export class PDFUpload extends BaseInput {
@@ -517,7 +515,6 @@ export class PDFUpload extends BaseInput {
             const pdfBytes = await newPdfDoc.save();
 
             // Create a ReadStream from the PDF bytes
-            const { Readable } = require('stream');
             const stream = new Readable();
             stream.push(pdfBytes);
             stream.push(null); // End the stream
@@ -589,20 +586,5 @@ export class PDFUpload extends BaseInput {
      */
     hasPageSelection(): boolean {
         return this.pages !== undefined && this.pages.length > 0;
-    }
-
-    /**
-     * Clean up any temporary files created during processing.
-     * Should be called after upload is complete to free up disk space.
-     */
-    cleanup(): void {
-        if (this.processedFile && this.processedFile !== this.file) {
-            try {
-                fs.unlinkSync(this.processedFile);
-                this.processedFile = undefined;
-            } catch (error) {
-                console.warn(`Failed to clean up temporary file ${this.processedFile}:`, error);
-            }
-        }
     }
 }
