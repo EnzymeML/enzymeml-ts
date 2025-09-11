@@ -116,6 +116,8 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
     tools?: ToolDefinition[];
     /** Optional progress callback for tool-chain state */
     onToolChainEvent?: (e: ToolChainEvent) => void;
+    /** Whether to use OpenAI's web search capabilities */
+    useWebSearch?: boolean;
 };
 
 /**
@@ -135,38 +137,15 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  * 
  * @example
  * ```typescript
- * import { SystemQuery, UserQuery, PDFUpload } from 'enzymeml';
+ * import { SystemQuery, UserQuery } from 'enzymeml';
  * import { z } from 'zod';
  * 
- * // Basic text streaming with SystemQuery and UserQuery
+ * // Basic text streaming
  * const { chunks, final } = await extractData({
  *   model: 'gpt-4o',
  *   input: [
- *     new SystemQuery('You are a helpful assistant that tells funny jokes.'),
+ *     new SystemQuery('You are a helpful assistant.'),
  *     new UserQuery('Tell me a joke')
- *   ],
- *   client
- * });
- * 
- * // Mixed input types (raw messages and input classes)
- * const { chunks, final } = await extractData({
- *   model: 'gpt-4o',
- *   input: [
- *     { role: 'system', content: 'You are a helpful assistant.' },
- *     new UserQuery('Tell me a joke')
- *   ],
- *   client
- * });
- * 
- * // With file upload and system prompt
- * const pdfUpload = new PDFUpload('./document.pdf', undefined, client);
- * await pdfUpload.upload(); // Upload the file first
- * const { chunks, final } = await extractData({
- *   model: 'gpt-4o',
- *   input: [
- *     new SystemQuery('You are an expert document analyzer.'),
- *     new UserQuery('Analyze this document'),
- *     pdfUpload
  *   ],
  *   client
  * });
@@ -178,7 +157,7 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  *   }
  * }
  * 
- * // With structured output and system prompt
+ * // With structured output
  * const schema = z.object({
  *   name: z.string(),
  *   age: z.number()
@@ -187,15 +166,15 @@ export type CreateStreamParams<TSchema extends ZodTypeAny | undefined> = {
  * const { chunks, final } = await extractData({
  *   model: 'gpt-4o',
  *   input: [
- *     new SystemQuery('Respond only with JSON matching the schema under key "person".'),
- *     new UserQuery('Generate a person')
+ *     new SystemQuery('Generate a person matching the schema.'),
+ *     new UserQuery('Create a random person')
  *   ],
  *   schema,
  *   schemaKey: 'person',
  *   client
  * });
  * 
- * // With tools and progress tracking
+ * // With tools
  * const { chunks, final } = await extractData({
  *   model: 'gpt-4o',
  *   input: [
@@ -222,6 +201,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
         client,
         tools,
         onToolChainEvent,
+        useWebSearch,
     } = params;
 
     // Convert input to proper message format, handling BaseInput instances
@@ -279,10 +259,20 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
         );
     }
 
+    // Configure inputs when using web search
+    const webSearchInput = useWebSearch ? [{ type: "web_search" }] : undefined;
+    const webSearchToolChoice = useWebSearch ? "required" : undefined;
+    const webSearchInclude = useWebSearch ? ["web_search_call.action.sources"] : undefined;
+
     // Start the final streaming call with tool outputs already in context
     const stream = client.responses.stream({
         model,
         input: processedInput as any,
+        // @ts-ignore
+        tools: webSearchInput,
+        tool_choice: webSearchToolChoice,
+        // @ts-ignore
+        include: webSearchInclude,
         temperature: REASONING_MODELS.includes(model) ? undefined : 0,
         ...(schemaInput
             ? { text: { format: zodTextFormat(schemaInput, schemaKey) } }
@@ -360,8 +350,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
  *     handlers: {
  *       search_databases: SearchDatabaseTool
  *     }
- *   },
- *   (event) => console.log(event.type, event.payload)
+ *   }
  * );
  * ```
  */
