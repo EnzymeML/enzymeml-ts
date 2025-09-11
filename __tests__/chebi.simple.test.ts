@@ -75,67 +75,125 @@ describe('ChEBI Fetcher - Core Functionality', () => {
         });
 
         it('should construct correct URL and search parameters', async () => {
-            // Mock the OLS4 API response
+            // Mock the new ChEBI search API response
             const mockSearchResponse = {
-                response: {
-                    docs: [
-                        { short_form: '17234', label: 'glucose' },
-                        { short_form: '4167', label: 'D-glucose' }
-                    ]
-                }
+                results: [
+                    { "_source": { "chebi_accession": "CHEBI:17234" } },
+                    { "_source": { "chebi_accession": "CHEBI:4167" } }
+                ]
             };
 
-            // Mock the ChEBI API responses for individual entries
-            const mockChebiResponse = `<?xml version="1.0" encoding="UTF-8"?>
-                <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-                    <getCompleteEntityResponse>
-                        <return>
-                            <chebiId>CHEBI:17234</chebiId>
-                            <chebiAsciiName>glucose</chebiAsciiName>
-                            <status>PUBLISHED</status>
-                        </return>
-                    </getCompleteEntityResponse>
-                </soap:Envelope>`;
+            // Mock the ChEBI compounds API responses for batch fetch
+            const mockChebiResponse = {
+                "CHEBI:17234": {
+                    "standardized_chebi_id": "CHEBI:17234",
+                    "primary_chebi_id": "CHEBI:17234",
+                    "exists": true,
+                    "id_type": "primary",
+                    "data": {
+                        "id": 17234,
+                        "chebi_accession": "CHEBI:17234",
+                        "name": "glucose",
+                        "ascii_name": "glucose",
+                        "stars": 3,
+                        "definition": "An aldohexose used as a source of energy",
+                        "names": {},
+                        "chemical_data": {
+                            "formula": "C6H12O6",
+                            "charge": 0,
+                            "mass": "180.15588",
+                            "monoisotopic_mass": "180.06339"
+                        },
+                        "default_structure": {
+                            "id": 1,
+                            "smiles": "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O",
+                            "standard_inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6?/m1/s1",
+                            "standard_inchi_key": "WQZGKKKJIJFFOK-GASJEMHNSA-N",
+                            "wurcs": null,
+                            "is_r_group": false
+                        },
+                        "modified_on": "2023-01-01T00:00:00Z",
+                        "secondary_ids": [],
+                        "is_released": true
+                    }
+                },
+                "CHEBI:4167": {
+                    "standardized_chebi_id": "CHEBI:4167",
+                    "primary_chebi_id": "CHEBI:4167",
+                    "exists": true,
+                    "id_type": "primary",
+                    "data": {
+                        "id": 4167,
+                        "chebi_accession": "CHEBI:4167",
+                        "name": "D-glucose",
+                        "ascii_name": "D-glucose",
+                        "stars": 3,
+                        "definition": "A glucose with D-configuration",
+                        "names": {},
+                        "chemical_data": {
+                            "formula": "C6H12O6",
+                            "charge": 0,
+                            "mass": "180.15588",
+                            "monoisotopic_mass": "180.06339"
+                        },
+                        "default_structure": {
+                            "id": 2,
+                            "smiles": "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O",
+                            "standard_inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6?/m1/s1",
+                            "standard_inchi_key": "WQZGKKKJIJFFOK-GASJEMHNSA-N",
+                            "wurcs": null,
+                            "is_r_group": false
+                        },
+                        "modified_on": "2023-01-01T00:00:00Z",
+                        "secondary_ids": [],
+                        "is_released": true
+                    }
+                }
+            };
 
             mockFetch
                 .mockResolvedValueOnce({
                     ok: true,
                     json: async () => mockSearchResponse,
                 })
-                .mockResolvedValue({
+                .mockResolvedValueOnce({
                     ok: true,
-                    text: async () => mockChebiResponse,
+                    json: async () => mockChebiResponse,
                 });
 
             await searchChebi('glucose', 5);
 
             // Verify the search API call
             expect(mockFetch).toHaveBeenCalledWith(
-                expect.stringContaining('https://www.ebi.ac.uk/ols4/api/search')
+                expect.stringContaining('https://www.ebi.ac.uk/chebi/backend/api/public/es_search/')
             );
 
             const searchCall = mockFetch.mock.calls[0][0];
-            expect(searchCall).toContain('q=glucose');
-            expect(searchCall).toContain('ontology=chebi');
-            expect(searchCall).toContain('rows=5');
+            expect(searchCall).toContain('term=glucose');
+            expect(searchCall).toContain('size=5');
         });
 
         it('should handle empty search results', async () => {
             const mockSearchResponse = {
-                response: {
-                    docs: []
-                }
+                results: []
             };
 
-            mockFetch.mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockSearchResponse,
-            });
+            const mockChebiResponse = {};
+
+            mockFetch
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => mockSearchResponse,
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => mockChebiResponse,
+                });
 
             const results = await searchChebi('nonexistent', 10);
 
             expect(results).toEqual([]);
-            expect(mockFetch).toHaveBeenCalledTimes(1);
+            expect(mockFetch).toHaveBeenCalledTimes(2);
         });
 
         it('should handle network errors gracefully', async () => {
@@ -168,40 +226,126 @@ describe('ChEBI Fetcher - Core Functionality', () => {
 
         it('should process multiple search results correctly', async () => {
             const mockSearchResponse = {
-                response: {
-                    docs: [
-                        { short_form: '17234', label: 'glucose' },
-                        { short_form: '4167', label: 'D-glucose' },
-                        { short_form: '15903', label: 'glucose 6-phosphate' }
-                    ]
-                }
+                results: [
+                    { "_source": { "chebi_accession": "CHEBI:17234" } },
+                    { "_source": { "chebi_accession": "CHEBI:4167" } },
+                    { "_source": { "chebi_accession": "CHEBI:15903" } }
+                ]
             };
 
-            const mockChebiResponse = `<?xml version="1.0" encoding="UTF-8"?>
-                <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-                    <getCompleteEntityResponse>
-                        <return>
-                            <chebiId>CHEBI:17234</chebiId>
-                            <chebiAsciiName>glucose</chebiAsciiName>
-                            <status>PUBLISHED</status>
-                        </return>
-                    </getCompleteEntityResponse>
-                </soap:Envelope>`;
+            const mockChebiResponse = {
+                "CHEBI:17234": {
+                    "standardized_chebi_id": "CHEBI:17234",
+                    "primary_chebi_id": "CHEBI:17234",
+                    "exists": true,
+                    "id_type": "primary",
+                    "data": {
+                        "id": 17234,
+                        "chebi_accession": "CHEBI:17234",
+                        "name": "glucose",
+                        "ascii_name": "glucose",
+                        "stars": 3,
+                        "definition": "An aldohexose used as a source of energy",
+                        "names": {},
+                        "chemical_data": {
+                            "formula": "C6H12O6",
+                            "charge": 0,
+                            "mass": "180.15588",
+                            "monoisotopic_mass": "180.06339"
+                        },
+                        "default_structure": {
+                            "id": 1,
+                            "smiles": "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O",
+                            "standard_inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6?/m1/s1",
+                            "standard_inchi_key": "WQZGKKKJIJFFOK-GASJEMHNSA-N",
+                            "wurcs": null,
+                            "is_r_group": false
+                        },
+                        "modified_on": "2023-01-01T00:00:00Z",
+                        "secondary_ids": [],
+                        "is_released": true
+                    }
+                },
+                "CHEBI:4167": {
+                    "standardized_chebi_id": "CHEBI:4167",
+                    "primary_chebi_id": "CHEBI:4167",
+                    "exists": true,
+                    "id_type": "primary",
+                    "data": {
+                        "id": 4167,
+                        "chebi_accession": "CHEBI:4167",
+                        "name": "D-glucose",
+                        "ascii_name": "D-glucose",
+                        "stars": 3,
+                        "definition": "A glucose with D-configuration",
+                        "names": {},
+                        "chemical_data": {
+                            "formula": "C6H12O6",
+                            "charge": 0,
+                            "mass": "180.15588",
+                            "monoisotopic_mass": "180.06339"
+                        },
+                        "default_structure": {
+                            "id": 2,
+                            "smiles": "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1O",
+                            "standard_inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6?/m1/s1",
+                            "standard_inchi_key": "WQZGKKKJIJFFOK-GASJEMHNSA-N",
+                            "wurcs": null,
+                            "is_r_group": false
+                        },
+                        "modified_on": "2023-01-01T00:00:00Z",
+                        "secondary_ids": [],
+                        "is_released": true
+                    }
+                },
+                "CHEBI:15903": {
+                    "standardized_chebi_id": "CHEBI:15903",
+                    "primary_chebi_id": "CHEBI:15903",
+                    "exists": true,
+                    "id_type": "primary",
+                    "data": {
+                        "id": 15903,
+                        "chebi_accession": "CHEBI:15903",
+                        "name": "glucose 6-phosphate",
+                        "ascii_name": "glucose 6-phosphate",
+                        "stars": 3,
+                        "definition": "A glucose phosphate that is glucose carrying a single phosphate substituent at position 6",
+                        "names": {},
+                        "chemical_data": {
+                            "formula": "C6H13O9P",
+                            "charge": 0,
+                            "mass": "260.13684",
+                            "monoisotopic_mass": "260.02973"
+                        },
+                        "default_structure": {
+                            "id": 3,
+                            "smiles": "OC[C@H]1OC(O)[C@H](O)[C@@H](O)[C@@H]1OP(O)(O)=O",
+                            "standard_inchi": "InChI=1S/C6H13O9P/c7-1-2-3(8)4(9)5(10)6(14-2)15-16(11,12)13/h2-10H,1H2,(H2,11,12,13)/t2-,3-,4+,5-,6?/m1/s1",
+                            "standard_inchi_key": "NBSCHQHZLSJFNQ-GASJEMHNSA-N",
+                            "wurcs": null,
+                            "is_r_group": false
+                        },
+                        "modified_on": "2023-01-01T00:00:00Z",
+                        "secondary_ids": [],
+                        "is_released": true
+                    }
+                }
+            };
 
             mockFetch
                 .mockResolvedValueOnce({
                     ok: true,
                     json: async () => mockSearchResponse,
                 })
-                .mockResolvedValue({
+                .mockResolvedValueOnce({
                     ok: true,
-                    text: async () => mockChebiResponse,
+                    json: async () => mockChebiResponse,
                 });
 
             const results = await searchChebi('glucose', 3);
 
-            // Should have called fetch for the search + 3 individual ChEBI entries
-            expect(mockFetch).toHaveBeenCalledTimes(4);
+            // Should have called fetch for the search + 1 batch fetch for compounds
+            expect(mockFetch).toHaveBeenCalledTimes(2);
             expect(results).toHaveLength(3);
         });
     });

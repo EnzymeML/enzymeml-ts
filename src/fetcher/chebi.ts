@@ -5,15 +5,12 @@
  * ChEBI database by ID and map it to the EnzymeML data model (v2).
  */
 
-import { XMLParser } from 'fast-xml-parser';
 import { SmallMolecule } from '..';
 
 /**
  * Fetch a ChEBI entry by ID and convert it to a SmallMolecule object.
  * 
  * @param chebiId - The ChEBI ID to fetch
- * @param smallmolId - Optional custom ID for the small molecule
- * @param vesselId - The ID of the vessel to add the small molecule to
  * @returns A SmallMolecule object with data from ChEBI
  * @throws ChEBIError if the ChEBI ID is invalid or not found
  * @throws Error if the connection to the ChEBI server fails
@@ -21,37 +18,47 @@ import { SmallMolecule } from '..';
 export async function fetchChebi(
     chebiId: string
 ): Promise<SmallMolecule> {
-    const client = new ChEBIClient();
-    const chebiEntity = await client.getEntryById(chebiId);
+    const url = new URL("https://www.ebi.ac.uk/chebi/backend/api/public/compounds/");
+    url.searchParams.set('chebi_ids', chebiId);
+
+    const response = await fetch(url.toString());
+    const chebiEntity: ChEBIApiResponse = await response.json();
 
     if (!chebiEntity) {
         throw new ChEBIError(`No data found for ChEBI ID ${chebiId}`);
     }
 
-    // Create a SmallMolecule instance
-    const id = processId(chebiEntity.chebiAsciiName);
+    // Get the first entry
+    const entry = Object.values(chebiEntity)[0];
 
-    const smallMolecule: SmallMolecule = {
-        id,
-        name: chebiEntity.chebiAsciiName,
-        canonical_smiles: chebiEntity.smiles || null,
-        inchi: chebiEntity.inchi || null,
-        inchikey: chebiEntity.inchiKey || null,
-        constant: false,
-        vessel_id: null,
-        synonymous_names: [],
-        references: [
-            `https://www.ebi.ac.uk/chebi/searchId.do?chebiId=${chebiEntity.chebiId}`
-        ],
-    };
+    return processChebiEntry(entry);
+}
 
-    return smallMolecule;
+/**
+ * Fetch multiple ChEBI entries by their IDs and convert them to SmallMolecule objects.
+ * 
+ * @param chebiIds - Array of ChEBI IDs to fetch
+ * @returns Array of SmallMolecule objects with data from ChEBI
+ * @throws ChEBIError if any ChEBI ID is invalid or not found
+ * @throws Error if the connection to the ChEBI server fails
+ */
+export async function fetchChebiBatch(chebiIds: string[]): Promise<SmallMolecule[]> {
+    if (chebiIds.length === 0) {
+        return [];
+    }
+
+    const url = new URL("https://www.ebi.ac.uk/chebi/backend/api/public/compounds/");
+    url.searchParams.set('chebi_ids', chebiIds.join(','));
+
+    const response = await fetch(url.toString());
+    const chebiEntity: ChEBIApiResponse = await response.json();
+    return Object.values(chebiEntity).map(processChebiEntry);
 }
 
 /**
  * Search for ChEBI entries by query string.
  * 
- * This function searches the ChEBI database using the EBI OLS4 API and returns
+ * This function searches the ChEBI database using the EBI search API and returns
  * an array of SmallMolecule objects for each matching entry.
  * 
  * @param query - The search query string to find ChEBI entries
@@ -68,254 +75,54 @@ export async function fetchChebi(
  * const atpResults = await searchChebi('ATP', 5);
  * ```
  */
-export async function searchChebi(query: string, size: number): Promise<SmallMolecule[]> {
-    const url = new URL('https://www.ebi.ac.uk/ols4/api/search');
-    url.searchParams.set('q', query);
-    url.searchParams.set('ontology', 'chebi');
-    url.searchParams.set('rows', size.toString());
+export async function searchChebi(query: string, size?: number): Promise<SmallMolecule[]> {
+    const url = new URL('https://www.ebi.ac.uk/chebi/backend/api/public/es_search/');
+    url.searchParams.set('term', query);
+
+    if (size) {
+        url.searchParams.set('size', size.toString());
+    }
 
     const response = await fetch(url.toString());
-    const searchResults: SearchResponse = await response.json();
+    const searchResults: ChebiSearchResponse = await response.json();
 
-    const fetchPromises = searchResults.response.docs.map((result) => {
-        // Convert the short_form from CHEBI_12345 to 12345 format
-        const chebiId = result.short_form.replace('CHEBI_', '');
-        return fetchChebi(chebiId);
-    });
-
-    return Promise.all(fetchPromises);
-}
-
-interface SearchResponse {
-    response: { docs: SearchResult[] }
-}
-
-interface SearchResult {
-    iri: string;
-    ontology_name: string;
-    ontology_prefix: string;
-    short_form: string;
-    description: string[];
-    label: string;
-    obo_id: string;
-    type: string;
+    const chebiIds = searchResults.results.map((result) => result._source.chebi_accession);
+    return fetchChebiBatch(chebiIds);
 }
 
 /**
- * Interface for a ChEBI entity property.
- */
-export interface PropertyModel {
-    name: string;
-    value: string;
-}
-
-/**
- * Interface for a ChEBI synonym.
- */
-export interface SynonymModel {
-    data: string;
-    type: string;
-    source?: string;
-}
-
-/**
- * Interface for a ChEBI chemical formula.
- */
-export interface FormulaModel {
-    formula: string;
-    source?: string;
-}
-
-/**
- * Interface for a ChEBI structure representation.
- */
-export interface StructureModel {
-    type: string;
-    structure: string;
-    dimension?: string;
-    format?: string;
-}
-
-/**
- * Interface for a ChEBI entity response.
- */
-export interface ChEBIEntity {
-    chebiId: string;
-    chebiAsciiName: string;
-    definition?: string;
-    status: string;
-    mass?: number;
-    charge?: number;
-    structure?: StructureModel;
-    formula?: FormulaModel;
-    inchi?: string;
-    inchiKey?: string;
-    smiles?: string;
-    chebiIdVersion?: string;
-}
-
-/**
- * Interface for the ChEBI API response inside SOAP envelope.
- */
-export interface GetEntityResponse {
-    return: ChEBIEntity;
-}
-
-/**
- * Error class for ChEBI-specific errors.
- */
-export class ChEBIError extends Error {
-    constructor(message: string, public readonly cause?: Error) {
-        super(message);
-        this.name = 'ChEBIError';
-    }
-}
-
-/**
- * Client for accessing the ChEBI API to fetch chemical entity data.
- */
-export class ChEBIClient {
-    private static readonly BASE_URL = 'https://www.ebi.ac.uk/webservices/chebi/2.0/test/getCompleteEntity';
-    private parser: XMLParser;
-
-    constructor() {
-        this.parser = new XMLParser({
-            ignoreAttributes: false,
-            attributeNamePrefix: '@_',
-            textNodeName: '#text',
-            parseAttributeValue: true,
-            trimValues: true,
-        });
-    }
-
-    /**
-     * Fetch a ChEBI entry by its ID.
-     * 
-     * @param chebiId - The ChEBI ID to fetch, can be with or without the 'CHEBI:' prefix
-     * @returns ChEBIEntity object with the parsed response data
-     * @throws ChEBIError if the ChEBI ID is invalid or not found
-     * @throws Error if the connection to the ChEBI server fails
-     */
-    async getEntryById(chebiId: string): Promise<ChEBIEntity> {
-        // Ensure the CHEBI ID has the correct format
-        const formattedId = chebiId.startsWith('CHEBI:') ? chebiId : `CHEBI:${chebiId}`;
-
-        // Construct the URL
-        const url = `${ChEBIClient.BASE_URL}?chebiId=${formattedId}`;
-
-        try {
-            const response = await fetch(url);
-
-            if (!response.ok) {
-                throw new ChEBIError(`HTTP error ${response.status}: ${response.statusText}`);
-            }
-
-            const xmlText = await response.text();
-
-            // Extract the getCompleteEntityResponse element using regex
-            const match = xmlText.match(/<getCompleteEntityResponse.*?<\/getCompleteEntityResponse>/s);
-
-            if (!match) {
-                throw new ChEBIError('Could not find expected content in ChEBI response');
-            }
-
-            try {
-                // Parse only the relevant XML fragment
-                const parsedXml = this.parser.parse(match[0]);
-                const entityResponse = this.extractEntityResponse(parsedXml);
-
-                if (!entityResponse?.return) {
-                    throw new ChEBIError(`No data found for ChEBI ID ${formattedId}`);
-                }
-
-                return entityResponse.return;
-            } catch (parseError) {
-                throw new ChEBIError(
-                    `Failed to parse ChEBI response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-                    parseError instanceof Error ? parseError : undefined
-                );
-            }
-        } catch (error) {
-            if (error instanceof ChEBIError) {
-                throw error;
-            }
-            throw new ChEBIError(
-                `Connection to ChEBI server failed: ${error instanceof Error ? error.message : String(error)}`,
-                error instanceof Error ? error : undefined
-            );
-        }
-    }
-
-    /**
-     * Extract the entity response from parsed XML.
-     * Handles the nested structure of the SOAP response.
-     */
-    private extractEntityResponse(parsedXml: any): GetEntityResponse {
-        // Navigate through the XML structure to find the entity data
-        const response = parsedXml?.getCompleteEntityResponse;
-        if (!response) {
-            throw new ChEBIError('Invalid XML structure: missing getCompleteEntityResponse');
-        }
-
-        return {
-            return: this.parseEntity(response.return)
-        };
-    }
-
-    /**
-     * Parse the entity data from the XML response.
-     */
-    private parseEntity(entityData: any): ChEBIEntity {
-        if (!entityData) {
-            throw new ChEBIError('Invalid XML structure: missing return element');
-        }
-
-        return {
-            chebiId: entityData.chebiId || '',
-            chebiAsciiName: entityData.chebiAsciiName || '',
-            definition: entityData.definition || undefined,
-            status: entityData.status || '',
-            mass: entityData.mass ? parseFloat(entityData.mass) : undefined,
-            charge: entityData.charge ? parseInt(entityData.charge, 10) : undefined,
-            structure: entityData.structure ? this.parseStructure(entityData.structure) : undefined,
-            formula: entityData.formula ? this.parseFormula(entityData.formula) : undefined,
-            inchi: entityData.inchi || undefined,
-            inchiKey: entityData.inchiKey || undefined,
-            smiles: entityData.smiles || undefined,
-            chebiIdVersion: entityData.chebiIdVersion || undefined,
-        };
-    }
-
-    /**
-     * Parse structure data from XML.
-     */
-    private parseStructure(structureData: any): StructureModel {
-        return {
-            type: structureData['@_type'] || '',
-            structure: structureData.structure || '',
-            dimension: structureData['@_dimension'] || undefined,
-            format: structureData['@_format'] || undefined,
-        };
-    }
-
-    /**
-     * Parse formula data from XML.
-     */
-    private parseFormula(formulaData: any): FormulaModel {
-        return {
-            formula: formulaData.data || formulaData || '',
-            source: formulaData['@_source'] || undefined,
-        };
-    }
-}
-
-/**
- * Process the ID of a ChEBI entity.
+ * Process a ChEBI entry result and convert it to a SmallMolecule object.
  * 
- * Replaces special characters and initial non-alpha characters with an underscore.
+ * @param entry - The ChEBI entry result from the API
+ * @returns A SmallMolecule object with mapped data
+ */
+function processChebiEntry(entry: ChEBIEntryResult): SmallMolecule {
+    // Create a SmallMolecule instance
+    const id = processId(entry.data.ascii_name);
+
+    return {
+        id,
+        name: entry.data.ascii_name,
+        canonical_smiles: entry.data.default_structure?.smiles || null,
+        inchi: entry.data.default_structure?.standard_inchi || null,
+        inchikey: entry.data.default_structure?.standard_inchi_key || null,
+        constant: false,
+        vessel_id: null,
+        synonymous_names: [],
+        references: [
+            `https://www.ebi.ac.uk/chebi/searchId.do?chebiId=${entry.standardized_chebi_id}`
+        ],
+    };
+}
+
+/**
+ * Process a name string to create a valid identifier.
  * 
- * @param name - The name to process
- * @returns Processed ID string
+ * Replaces non-alphanumeric characters with underscores, removes consecutive
+ * underscores, converts to lowercase, and trims leading/trailing underscores.
+ * 
+ * @param name - The name string to process
+ * @returns A processed identifier string
  */
 export function processId(name: string): string {
     // Replace non-alphanumeric characters with underscore
@@ -328,6 +135,99 @@ export function processId(name: string): string {
 }
 
 /**
- * Fetch a ChEBI entry by ID (alias for fetchChebi for consistency with Python API).
+ * Top-level response structure from ChEBI API
+ * Maps ChEBI IDs to their corresponding entry data
  */
-export const fetch_chebi = fetchChebi;
+interface ChEBIApiResponse {
+    [chebiId: string]: ChEBIEntryResult;
+}
+
+/**
+ * Individual ChEBI entry result
+ */
+interface ChEBIEntryResult {
+    standardized_chebi_id: string;
+    primary_chebi_id: string;
+    exists: boolean;
+    id_type: string;
+    data: ChEBIEntryData;
+}
+
+/**
+ * Core data structure for a ChEBI entry
+ */
+interface ChEBIEntryData {
+    id: number;
+    chebi_accession: string;
+    name: string;
+    ascii_name: string;
+    stars: number;
+    definition: string;
+    names: ChEBINames;
+    chemical_data: ChEBIChemicalData;
+    default_structure: ChEBIStructure;
+    modified_on: string;
+    secondary_ids: string[];
+    is_released: boolean;
+}
+
+/**
+ * Chemical structure information
+ */
+interface ChEBIStructure {
+    id: number;
+    smiles: string;
+    standard_inchi: string;
+    standard_inchi_key: string;
+    wurcs: string | null;
+    is_r_group: boolean;
+}
+
+/**
+ * Names and synonyms structure
+ */
+interface ChEBINames {
+    SYNONYM?: ChEBIName[];
+    "IUPAC NAME"?: ChEBIName[];
+    INN?: ChEBIName[];
+}
+
+/**
+ * Individual name/synonym entry
+ */
+interface ChEBIName {
+    name: string;
+    status: string;
+    type: string;
+    source: string;
+    ascii_name: string;
+    adapted: boolean;
+    language_code: string;
+}
+
+/**
+ * Chemical formula and mass data
+ */
+interface ChEBIChemicalData {
+    formula: string;
+    charge: number;
+    mass: string;
+    monoisotopic_mass: string;
+}
+
+/**
+ * Search response structure from ChEBI search API
+ */
+interface ChebiSearchResponse {
+    results: { "_source": { chebi_accession: string } }[];
+}
+
+/**
+ * Error class for ChEBI-specific errors.
+ */
+export class ChEBIError extends Error {
+    constructor(message: string, public readonly cause?: Error) {
+        super(message);
+        this.name = 'ChEBIError';
+    }
+}
