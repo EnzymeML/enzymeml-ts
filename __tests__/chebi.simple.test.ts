@@ -178,29 +178,22 @@ describe('ChEBI Fetcher - Core Functionality', () => {
                 results: []
             };
 
-            const mockChebiResponse = {};
-
-            mockFetch
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => mockSearchResponse,
-                })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => mockChebiResponse,
-                });
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => mockSearchResponse,
+            });
 
             const results = await searchChebi('nonexistent', 10);
 
             expect(results).toEqual([]);
-            expect(mockFetch).toHaveBeenCalledTimes(2);
+            expect(mockFetch).toHaveBeenCalledTimes(1);
         });
 
         it('should handle network errors gracefully', async () => {
             const networkError = new Error('Network error');
             mockFetch.mockRejectedValueOnce(networkError);
 
-            await expect(searchChebi('glucose', 5)).rejects.toThrow('Network error');
+            await expect(searchChebi('glucose', 5)).rejects.toThrow('Failed to search ChEBI: Network error');
         });
 
         it('should handle JSON parsing errors', async () => {
@@ -209,7 +202,7 @@ describe('ChEBI Fetcher - Core Functionality', () => {
                 json: async () => { throw new Error('Invalid JSON'); }
             });
 
-            await expect(searchChebi('glucose', 5)).rejects.toThrow('Invalid JSON');
+            await expect(searchChebi('glucose', 5)).rejects.toThrow('Failed to search ChEBI: Invalid JSON');
         });
 
         it('should handle API errors with non-ok status', async () => {
@@ -219,9 +212,7 @@ describe('ChEBI Fetcher - Core Functionality', () => {
                 statusText: 'Internal Server Error'
             });
 
-            // The function doesn't currently check for response.ok, so it will try to parse JSON
-            // This test documents current behavior
-            await expect(searchChebi('glucose', 5)).rejects.toThrow();
+            await expect(searchChebi('glucose', 5)).rejects.toThrow('Search failed: HTTP 500: Internal Server Error');
         });
 
         it('should process multiple search results correctly', async () => {
