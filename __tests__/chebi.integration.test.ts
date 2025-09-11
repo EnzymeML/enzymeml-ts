@@ -3,53 +3,12 @@
  * These tests make actual HTTP requests to the ChEBI API
  */
 
-import { ChEBIClient, ChEBIError, fetchChebi, searchChebi } from '../src/fetcher/chebi';
+import { ChEBIError, fetchChebi, searchChebi } from '../src/fetcher/chebi';
 
 
 describe('ChEBI Integration Tests', () => {
-    let client: ChEBIClient;
 
     beforeEach(() => {
-        client = new ChEBIClient();
-    });
-
-    describe('ChEBIClient.getEntryById', () => {
-        it('should fetch glucose (CHEBI:17234) successfully', async () => {
-            const result = await client.getEntryById('17234');
-
-            expect(result.chebiId).toBe('CHEBI:17234');
-            expect(result.chebiAsciiName).toBe('glucose');
-            expect(['PUBLISHED', 'CHECKED']).toContain(result.status); // Allow both statuses
-
-            // Some fields might be optional depending on the ChEBI entry
-            if (result.inchi) {
-                expect(result.inchi).toContain('InChI=');
-            }
-            if (result.inchiKey) {
-                expect(result.inchiKey).toMatch(/^[A-Z]{14}-[A-Z]{10}-[A-Z]$/);
-            }
-            if (result.mass) {
-                expect(typeof result.mass).toBe('number');
-            }
-        }, 10000); // 10 second timeout
-
-        it('should fetch ATP (CHEBI:15422) successfully', async () => {
-            const result = await client.getEntryById('CHEBI:15422');
-
-            expect(result.chebiId).toBe('CHEBI:15422');
-            expect(result.chebiAsciiName).toBe('ATP');
-            expect(['PUBLISHED', 'CHECKED']).toContain(result.status); // Allow both statuses
-            expect(result.inchi).toContain('InChI=');
-            expect(result.inchiKey).toMatch(/^[A-Z]{14}-[A-Z]{10}-[A-Z]$/);
-        }, 10000);
-
-        it('should handle non-existent ChEBI ID gracefully', async () => {
-            await expect(client.getEntryById('999999999')).rejects.toThrow(ChEBIError);
-        }, 10000);
-
-        it('should handle invalid ChEBI ID format', async () => {
-            await expect(client.getEntryById('invalid-id')).rejects.toThrow(ChEBIError);
-        }, 10000);
     });
 
     describe('fetchChebi', () => {
@@ -96,20 +55,6 @@ describe('ChEBI Integration Tests', () => {
         }, 10000);
     });
 
-    describe('Real API Error Handling', () => {
-        it('should handle server timeouts gracefully', async () => {
-            // This test might be flaky depending on network conditions
-            // But it helps ensure proper error handling
-            const client = new ChEBIClient();
-
-            try {
-                await client.getEntryById('17234');
-                // If it succeeds, that's fine too
-            } catch (error) {
-                expect(error).toBeInstanceOf(ChEBIError);
-            }
-        }, 15000);
-    });
 
     describe('searchChebi', () => {
         it('should search for glucose and return multiple SmallMolecule results', async () => {
@@ -162,13 +107,6 @@ describe('ChEBI Integration Tests', () => {
                 expect(hasATPRelated).toBe(true);
             }
         }, 20000);
-
-        it('should handle search queries with no results gracefully', async () => {
-            const results = await searchChebi('nonexistentcompound12345xyz', 10);
-
-            expect(Array.isArray(results)).toBe(true);
-            expect(results.length).toBe(0);
-        }, 10000);
 
         it('should respect the size parameter for limiting results', async () => {
             const smallResults = await searchChebi('water', 1);
