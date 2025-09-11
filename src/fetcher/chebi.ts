@@ -21,17 +21,33 @@ export async function fetchChebi(
     const url = new URL("https://www.ebi.ac.uk/chebi/backend/api/public/compounds/");
     url.searchParams.set('chebi_ids', chebiId);
 
-    const response = await fetch(url.toString());
-    const chebiEntity: ChEBIApiResponse = await response.json();
+    try {
+        const response = await fetch(url.toString());
 
-    if (!chebiEntity) {
-        throw new ChEBIError(`No data found for ChEBI ID ${chebiId}`);
+        if (!response.ok) {
+            throw new ChEBIError(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const chebiEntity: ChEBIApiResponse = await response.json();
+
+        // Special case: API returns empty object when no data is found
+        if (!chebiEntity || Object.keys(chebiEntity).length === 0) {
+            throw new ChEBIError(`No data found for ChEBI ID ${chebiId}`);
+        }
+
+        // Get the first entry - API returns a map with ChEBI ID as key
+        const entry = Object.values(chebiEntity)[0];
+
+        return processChebiEntry(entry);
+    } catch (error) {
+        // Re-throw ChEBIError instances to preserve error type
+        if (error instanceof ChEBIError) {
+            throw error;
+        }
+        // Wrap other errors in ChEBIError for consistent error handling
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ChEBIError(`Failed to fetch ChEBI ID ${chebiId}: ${errorMessage}`, error instanceof Error ? error : undefined);
     }
-
-    // Get the first entry
-    const entry = Object.values(chebiEntity)[0];
-
-    return processChebiEntry(entry);
 }
 
 /**
@@ -43,6 +59,7 @@ export async function fetchChebi(
  * @throws Error if the connection to the ChEBI server fails
  */
 export async function fetchChebiBatch(chebiIds: string[]): Promise<SmallMolecule[]> {
+    // Special case: Return empty array for empty input to avoid unnecessary API call
     if (chebiIds.length === 0) {
         return [];
     }
@@ -50,9 +67,24 @@ export async function fetchChebiBatch(chebiIds: string[]): Promise<SmallMolecule
     const url = new URL("https://www.ebi.ac.uk/chebi/backend/api/public/compounds/");
     url.searchParams.set('chebi_ids', chebiIds.join(','));
 
-    const response = await fetch(url.toString());
-    const chebiEntity: ChEBIApiResponse = await response.json();
-    return Object.values(chebiEntity).map(processChebiEntry);
+    try {
+        const response = await fetch(url.toString());
+
+        if (!response.ok) {
+            throw new ChEBIError(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const chebiEntity: ChEBIApiResponse = await response.json();
+        // Note: This will process all entries, including those marked as non-existent
+        // Individual entry validation happens in processChebiEntry
+        return Object.values(chebiEntity).map(processChebiEntry);
+    } catch (error) {
+        if (error instanceof ChEBIError) {
+            throw error;
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ChEBIError(`Failed to fetch ChEBI batch: ${errorMessage}`, error instanceof Error ? error : undefined);
+    }
 }
 
 /**
@@ -79,15 +111,36 @@ export async function searchChebi(query: string, size?: number): Promise<SmallMo
     const url = new URL('https://www.ebi.ac.uk/chebi/backend/api/public/es_search/');
     url.searchParams.set('term', query);
 
+    // Optional size parameter to limit search results
     if (size) {
         url.searchParams.set('size', size.toString());
     }
 
-    const response = await fetch(url.toString());
-    const searchResults: ChebiSearchResponse = await response.json();
+    try {
+        const response = await fetch(url.toString());
 
-    const chebiIds = searchResults.results.map((result) => result._source.chebi_accession);
-    return fetchChebiBatch(chebiIds);
+        if (!response.ok) {
+            throw new ChEBIError(`Search failed: HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const searchResults: ChebiSearchResponse = await response.json();
+
+        // Special case: Validate search response structure
+        if (!searchResults || !searchResults.results) {
+            throw new ChEBIError('Invalid search response format');
+        }
+
+        // Extract ChEBI accession numbers from search results
+        const chebiIds = searchResults.results.map((result) => result._source.chebi_accession);
+        // Fetch full compound data for all search results
+        return fetchChebiBatch(chebiIds);
+    } catch (error) {
+        if (error instanceof ChEBIError) {
+            throw error;
+        }
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new ChEBIError(`Failed to search ChEBI: ${errorMessage}`, error instanceof Error ? error : undefined);
+    }
 }
 
 /**
@@ -103,12 +156,13 @@ function processChebiEntry(entry: ChEBIEntryResult): SmallMolecule {
     return {
         id,
         name: entry.data.ascii_name,
+        // Special case: Structure data may be null for some compounds
         canonical_smiles: entry.data.default_structure?.smiles || null,
         inchi: entry.data.default_structure?.standard_inchi || null,
         inchikey: entry.data.default_structure?.standard_inchi_key || null,
         constant: false,
         vessel_id: null,
-        synonymous_names: [],
+        synonymous_names: [], // TODO: Could be populated from entry.data.names if needed
         references: [
             `https://www.ebi.ac.uk/chebi/searchId.do?chebiId=${entry.standardized_chebi_id}`
         ],
@@ -173,6 +227,7 @@ interface ChEBIEntryData {
 
 /**
  * Chemical structure information
+ * Note: All structure fields may be null for compounds without structural data
  */
 interface ChEBIStructure {
     id: number;
@@ -185,6 +240,7 @@ interface ChEBIStructure {
 
 /**
  * Names and synonyms structure
+ * All name types are optional as not all compounds have all name types
  */
 interface ChEBINames {
     SYNONYM?: ChEBIName[];
@@ -217,6 +273,7 @@ interface ChEBIChemicalData {
 
 /**
  * Search response structure from ChEBI search API
+ * Note: Results array may be empty for queries with no matches
  */
 interface ChebiSearchResponse {
     results: { "_source": { chebi_accession: string } }[];
