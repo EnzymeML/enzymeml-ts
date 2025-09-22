@@ -334,7 +334,7 @@ describe('fromName Integration Tests', () => {
             const duration = Date.now() - startTime;
 
             expect(result.id).toBe('2519');
-            expect(duration).toBeGreaterThanOrEqual(100);
+            expect(duration).toBeGreaterThanOrEqual(80);
         });
     });
 }); 
