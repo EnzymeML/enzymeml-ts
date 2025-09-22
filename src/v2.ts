@@ -381,6 +381,10 @@ export const ParameterSchema = z.lazy(() => BaseSchema.extend({
     Lower bound for the parameter value that was used for the parameter
     estimation
   `),
+  fit: z.boolean().nullable().describe(`
+    Whether this parameter should be varied or not in the context of an
+    optimization.
+  `),
   stderr: z.number().nullable().describe(`
     Standard error of the estimated parameter.
   `),
