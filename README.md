@@ -147,9 +147,70 @@ const myFunction = (data: EnzymeMLDocument): SmallMolecule => {
 }
 ```
 
+## Development
+
+### Code Quality
+
+This project uses ESLint for code linting and formatting. The linting rules are automatically enforced through pre-commit hooks using Husky.
+
+#### Available Scripts
+
+```bash
+# Run ESLint and automatically fix issues
+npm run lint
+
+# Check for ESLint issues without fixing
+npm run lint:check
+
+# Run tests
+npm test
+
+# Build the project
+npm run build
+```
+
+#### Pre-commit Hooks
+
+This project uses [Husky](https://github.com/typicode/husky) to automatically run code quality checks before each commit:
+
+- **ESLint**: Automatically runs on all staged TypeScript files
+- **Auto-fix**: Attempts to automatically fix linting issues where possible
+- **Commit blocking**: Prevents commits if there are unfixable linting errors
+
+The pre-commit hook will:
+1. Run `eslint --fix` on all staged `.ts` and `.js` files in the `src/` directory
+2. Automatically stage any fixes made by ESLint
+3. Block the commit if there are remaining linting errors that cannot be auto-fixed
+
+#### Setting up Development Environment
+
+After cloning the repository, run:
+
+```bash
+npm install
+```
+
+This will:
+- Install all dependencies
+- Set up Husky git hooks automatically via the `prepare` script
+- Configure the pre-commit hook to run ESLint
+
+#### Bypassing Pre-commit Hooks
+
+In rare cases where you need to bypass the pre-commit hooks (not recommended), you can use:
+
+```bash
+git commit --no-verify -m "your commit message"
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit an issue or a pull request.
+
+Before submitting a pull request:
+1. Ensure your code passes all ESLint checks (`npm run lint:check`)
+2. Run the test suite (`npm test`)
+3. Add tests for any new functionality
 
 ---
 
