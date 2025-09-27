@@ -1,6 +1,5 @@
 import { fetchPubChem } from '../src/fetcher/pubchem';
 import { Compound } from 'pubchem';
-import { SmallMolecule } from '../src';
 
 // Mock the pubchem module
 jest.mock('pubchem');
