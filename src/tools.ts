@@ -90,7 +90,7 @@ const SearchDatabaseToolFunction = async (
         databases: string[],
         query: string,
     }): Promise<(SmallMolecule | Protein)[]> => {
-    let responses: (SmallMolecule | Protein)[] = [];
+    const responses: (SmallMolecule | Protein)[] = [];
 
     for (const database of databases) {
         switch (database) {
@@ -98,9 +98,11 @@ const SearchDatabaseToolFunction = async (
                 responses.push(...await searchChebi(query, 5));
                 break;
             case "pdb":
-                const pdbResults = (await searchPdb(query)).slice(0, 5);
-                responses.push(...pdbResults);
-                break;
+                {
+                    const pdbResults: Protein[] = (await searchPdb(query)).slice(0, 5);
+                    responses.push(...pdbResults);
+                    break;
+                }
             case "pubchem":
                 responses.push(...await searchPubChem(query, 5));
                 break;
@@ -117,5 +119,5 @@ const SearchDatabaseToolFunction = async (
 
 export const SearchDatabaseTool: ToolDefinition = {
     specs: SearchDatabaseToolSpecs,
-    fun: SearchDatabaseToolFunction,
+    fun: SearchDatabaseToolFunction as (args: unknown) => Promise<unknown | unknown[]>,
 }
