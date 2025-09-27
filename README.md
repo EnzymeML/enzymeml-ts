@@ -191,6 +191,7 @@ npm install
 ```
 
 This will:
+
 - Install all dependencies
 - Set up Husky git hooks automatically via the `prepare` script
 - Configure the pre-commit hook to run ESLint
@@ -208,6 +209,7 @@ git commit --no-verify -m "your commit message"
 Contributions are welcome! Please feel free to submit an issue or a pull request.
 
 Before submitting a pull request:
+
 1. Ensure your code passes all ESLint checks (`npm run lint:check`)
 2. Run the test suite (`npm test`)
 3. Add tests for any new functionality
