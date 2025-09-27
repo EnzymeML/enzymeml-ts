@@ -78,7 +78,7 @@ export type ToolChainMeta = {
 export type ToolChainEvent =
     | { type: "chain_start"; meta: ToolChainMeta; payload: { inputSize: number } }
     | { type: "planning_result"; meta: ToolChainMeta; payload: { toolCount: number; toolNames: string[]; calls: ToolCallRef[] } }
-    | { type: "no_tools"; meta: ToolChainMeta; payload: {} }
+    | { type: "no_tools"; meta: ToolChainMeta; payload: object }
     | { type: "tool_start"; meta: ToolChainMeta; payload: ToolCallRef & { args: unknown } }
     | { type: "tool_retry"; meta: ToolChainMeta; payload: ToolCallRef & { attempt: number; nextDelayMs: number; message: string } }
     | { type: "tool_success"; meta: ToolChainMeta; payload: ToolCallRef & { durationMs: number; resultSize?: number } }
@@ -91,7 +91,7 @@ export type ToolChainEvent =
  */
 export type ToolDefinition = {
     specs: FunctionTool;
-    fun: (args: any) => Promise<any | any[]>;
+    fun: (args: unknown) => Promise<unknown | unknown[]>;
 };
 
 /**
@@ -226,7 +226,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
         const toolSpecs = tools.map((tool) => tool.specs);
 
         // Create a map of tool names to tool functions
-        let handlers: Record<string, (args: object) => Promise<any>> = {};
+        const handlers: Record<string, (args: unknown) => Promise<unknown>> = {};
         for (const tool of tools) {
             handlers[tool.specs.name] = tool.fun;
         }
@@ -267,11 +267,12 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
     // Start the final streaming call with tool outputs already in context
     const stream = client.responses.stream({
         model,
-        input: processedInput as any,
-        // @ts-ignore
+        // @ts-expect-error - processedInput is compatible but types are complex
+        input: processedInput,
+        // @ts-expect-error - webSearchInput types are complex
         tools: webSearchInput,
         tool_choice: webSearchToolChoice,
-        // @ts-ignore
+        // @ts-expect-error - include types are complex
         include: webSearchInclude,
         temperature: REASONING_MODELS.includes(model) ? undefined : 0,
         ...(schemaInput
@@ -286,14 +287,14 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
 
         const push = (item: StreamItem) => queue.push(item);
 
-        stream.on("response.output_text.delta", (e: any) =>
+        stream.on("response.output_text.delta", (e: { delta: string }) =>
             push({ kind: "text", delta: e.delta })
         );
-        stream.on("response.refusal.delta", (e: any) =>
+        stream.on("response.refusal.delta", (e: { delta: string }) =>
             push({ kind: "refusal", delta: e.delta })
         );
         // @ts-expect-error - response.error event exists but not in types
-        stream.on("response.error", (e: any) => push({ kind: "error", error: e.error }));
+        stream.on("response.error", (e: { error: unknown }) => push({ kind: "error", error: e.error }));
 
         const final = stream.finalResponse().finally(() => {
             done = true;
@@ -356,6 +357,7 @@ export async function extractData<TSchema extends ZodTypeAny | undefined>(
  */
 export async function runToolChain(
     tools: FunctionTool[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     baseInput: any[],
     client: OpenAI,
     model: string,
@@ -377,9 +379,10 @@ export async function runToolChain(
         /** Conversation ID for tracking */
         conversationId?: string;
         /** Map of tool names to handler functions */
-        handlers?: Record<string, (args: any, signal?: AbortSignal) => Promise<unknown> | unknown>;
+        handlers?: Record<string, (args: unknown, signal?: AbortSignal) => Promise<unknown> | unknown>;
     } = {},
     onEvent?: (e: ToolChainEvent) => void
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
     // Configuration
     const CONCURRENCY = Math.max(1, opts.concurrency ?? 2);
@@ -388,7 +391,7 @@ export async function runToolChain(
     const DEPTH = opts.depth ?? 1;
     const TOTAL = opts.totalDepth ?? 1;
 
-    let input = [...baseInput];
+    const input = [...baseInput];
 
     // Setup queue with concurrency and rate limiting
     const queue = new PQueue({
@@ -493,6 +496,7 @@ export async function runToolChain(
 async function planToolCalls(
     client: OpenAI,
     model: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any[],
     tools: FunctionTool[],
 ): Promise<Extract<ResponseOutputItem, { type: "function_call" }>[]> {
@@ -530,7 +534,7 @@ async function planToolCalls(
 async function executeToolCalls(
     calls: Extract<ResponseOutputItem, { type: "function_call" }>[],
     queue: PQueue,
-    handlerFor: (name: string) => ((args: any, signal?: AbortSignal) => Promise<unknown> | unknown) | undefined,
+    handlerFor: (name: string) => ((args: unknown, signal?: AbortSignal) => Promise<unknown> | unknown) | undefined,
     timeoutMs: number,
     retries: number,
     meta: () => ToolChainMeta,
@@ -589,7 +593,7 @@ async function executeToolCalls(
 async function executeSingleTool(
     call: Extract<ResponseOutputItem, { type: "function_call" }>,
     index: number,
-    handlerFor: (name: string) => ((args: any, signal?: AbortSignal) => Promise<unknown> | unknown) | undefined,
+    handlerFor: (name: string) => ((args: unknown, signal?: AbortSignal) => Promise<unknown> | unknown) | undefined,
     timeoutMs: number,
     retries: number,
     meta: () => ToolChainMeta,
@@ -599,7 +603,7 @@ async function executeSingleTool(
     const ref: ToolCallRef = { callId: call.call_id, name: call.name, index };
 
     // Parse arguments
-    let args: any = {};
+    let args: unknown = {};
     try {
         args = call.arguments ? JSON.parse(call.arguments) : {};
     } catch {
@@ -666,7 +670,7 @@ async function executeSingleTool(
                     payload: {
                         ...ref,
                         attempt: e.attemptNumber + 1,
-                        nextDelayMs: (e as any).nextDelay ?? 0,
+                        nextDelayMs: (e as { nextDelay?: number }).nextDelay ?? 0,
                         message: String(e),
                     },
                 });
@@ -689,4 +693,4 @@ async function executeSingleTool(
 
         return { call_id: ref.callId, output: JSON.stringify({ error: String(err) }) };
     }
-}
+}// Test comment
