@@ -213,6 +213,80 @@ export interface EntityInfo {
 }
 
 /**
+ * Interface for raw citation data from PDB API.
+ */
+export interface RawCitationData {
+    title?: string;
+    authors?: string[];
+    journal_abbrev?: string;
+    year?: number;
+    doi?: string;
+    pdbx_database_id_PubMed?: string;
+}
+
+/**
+ * Interface for PDB entry data from the API.
+ */
+export interface PdbEntryData {
+    rcsb_entry_container_identifiers?: {
+        polymer_entity_ids?: string[];
+    };
+    citation?: RawCitationData[];
+    struct?: {
+        title?: string;
+    };
+    rcsb_entry_info?: {
+        experimental_method?: string;
+        resolution_combined?: number[];
+    };
+    rcsb_primary_citation?: RcsbPrimaryCitation;
+}
+
+/**
+ * Interface for polymer entity data from the API.
+ */
+export interface PdbPolymerEntityData {
+    struct?: {
+        pdbx_descriptor?: string;
+    };
+    entity_poly?: {
+        type?: string;
+        pdbx_seq_one_letter_code?: string;
+    };
+    rcsb_polymer_entity?: {
+        enzyme_class?: string;
+    };
+    rcsb_polymer_entity_container_identifiers?: {
+        taxonomy_organism_scientific_name?: string;
+        taxonomy_id?: number;
+    };
+}
+
+/**
+ * Interface for RCSB primary citation data.
+ */
+export interface RcsbPrimaryCitation {
+    doi?: string;
+    pubmed_id?: string;
+    title?: string;
+    authors?: string[];
+    journal_name?: string;
+    year?: number;
+}
+
+/**
+ * Interface for RCSB entry information.
+ */
+export interface RcsbEntryInfo {
+    experimental_method?: string;
+    resolution_combined?: number[];
+    structure_determination_method?: string;
+    deposit_date?: string;
+    release_date?: string;
+    revision_date?: string;
+}
+
+/**
  * Interface for PDB API response.
  */
 export interface PDBResponse {
@@ -220,8 +294,8 @@ export interface PDBResponse {
     citation: Citation[];
     struct?: StructInfo;
     polymer_entities?: Record<string, EntityInfo>;
-    rcsb_primary_citation?: Record<string, any>;
-    rcsb_entry_info?: Record<string, any>;
+    rcsb_primary_citation?: RcsbPrimaryCitation;
+    rcsb_entry_info?: RcsbEntryInfo;
 }
 
 /**
@@ -254,7 +328,7 @@ export class PDBClient {
 
         try {
             // Fetch main entry data
-            const entryData = await this.fetchJson(`${PDBClient.BASE_URL}/entry/${formattedId}`);
+            const entryData = await this.fetchJson(`${PDBClient.BASE_URL}/entry/${formattedId}`) as PdbEntryData;
 
             // Get polymer entity information
             const polymerEntities: Record<string, EntityInfo> = {};
@@ -265,7 +339,7 @@ export class PDBClient {
                 for (const entityId of entityIds) {
                     const entityData = await this.fetchJson(
                         `${PDBClient.BASE_URL}/polymer_entity/${formattedId}/${entityId}`
-                    );
+                    ) as PdbPolymerEntityData;
 
                     // Extract entity information
                     polymerEntities[entityId] = {
@@ -280,7 +354,7 @@ export class PDBClient {
             }
 
             // Get citation data
-            const citation: Citation[] = (entryData?.citation || []).map((c: any) => ({
+            const citation: Citation[] = (entryData?.citation || []).map((c: RawCitationData) => ({
                 title: c.title,
                 authors: c.authors,
                 journal_name: c.journal_abbrev,
@@ -323,7 +397,7 @@ export class PDBClient {
      * @returns Parsed JSON as an object
      * @throws PDBError if the request fails or returns non-200 status
      */
-    private async fetchJson(url: string): Promise<any> {
+    private async fetchJson(url: string): Promise<unknown> {
         try {
             const response = await fetch(url);
 
