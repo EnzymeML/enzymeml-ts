@@ -278,7 +278,7 @@ describe('UserQuery', () => {
         const userQuery = new UserQuery("Test query");
 
         // Should resolve without errors
-        await expect(userQuery.upload(mockClient)).resolves.toBeUndefined();
+        await expect(userQuery.upload()).resolves.toBeUndefined();
     });
 
     it('should convert to text content', () => {
