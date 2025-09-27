@@ -22,8 +22,12 @@ async function fetchPubChem(query: string): Promise<SmallMolecule> {
             synonymous_names: [],
             references: [],
         };
-    } catch (error: any) {
-        console.error(`Error searching PubChem: ${error.message}`);
+    } catch (error: Error | unknown) {
+        if (error instanceof Error) {
+            console.error(`Error searching PubChem: ${error.message}`);
+        } else {
+            console.error(`Error searching PubChem: ${error}`);
+        }
         throw error;
     }
 }
