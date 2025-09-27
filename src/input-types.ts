@@ -78,7 +78,7 @@ export const SUPPORTED_FILE_TYPES = {
 export function isFileTypeSupported(filePath: string): boolean {
     const ext = path.extname(filePath).toLowerCase();
     const allSupported = [...SUPPORTED_FILE_TYPES.USER_DATA, ...SUPPORTED_FILE_TYPES.VISION];
-    return allSupported.includes(ext as any);
+    return allSupported.includes(ext as (typeof allSupported)[number]);
 }
 
 /**
@@ -90,11 +90,11 @@ export function isFileTypeSupported(filePath: string): boolean {
 export function getFilePurpose(filePath: string): "user_data" | "vision" {
     const ext = path.extname(filePath).toLowerCase();
 
-    if (SUPPORTED_FILE_TYPES.USER_DATA.includes(ext as any)) {
+    if (SUPPORTED_FILE_TYPES.USER_DATA.includes(ext as (typeof SUPPORTED_FILE_TYPES.USER_DATA)[number])) {
         return "user_data";
     }
 
-    if (SUPPORTED_FILE_TYPES.VISION.includes(ext as any)) {
+    if (SUPPORTED_FILE_TYPES.VISION.includes(ext as (typeof SUPPORTED_FILE_TYPES.VISION)[number])) {
         return "vision";
     }
 
@@ -250,7 +250,7 @@ export class UserQuery extends BaseInput {
     /**
      * No upload needed for text queries.
      */
-    async upload(client: OpenAI): Promise<void> {
+    async upload(): Promise<void> {
         // Text queries don't need uploading
         return Promise.resolve();
     }
@@ -308,7 +308,7 @@ export class SystemQuery extends BaseInput {
     /**
      * No upload needed for system prompts.
      */
-    async upload(client: OpenAI): Promise<void> {
+    async upload(): Promise<void> {
         // System prompts don't need uploading
         return Promise.resolve();
     }
@@ -520,7 +520,7 @@ export class PDFUpload extends BaseInput {
             stream.push(null); // End the stream
 
             // Add the name property that OpenAI requires for Uploadable objects
-            (stream as any).name = `processed_${path.basename(this.file)}`;
+            (stream as unknown as { name: string }).name = `processed_${path.basename(this.file)}`;
 
             return stream as fs.ReadStream;
         } catch (error) {

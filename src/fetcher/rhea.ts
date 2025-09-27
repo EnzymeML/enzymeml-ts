@@ -5,6 +5,7 @@
  * Rhea database by ID and map it to the EnzymeML data model (v2).
  */
 
+import Papa from 'papaparse';
 import { Reaction, ReactionElement, SmallMolecule } from '..';
 import { fetchChebi } from './chebi';
 
@@ -219,32 +220,29 @@ export class RheaClient {
     }
 
     /**
-     * Parse TSV text into an array of row objects.
+     * Parse TSV text into an array of row objects using papaparse.
      * 
      * @param tsvText - The raw TSV text
      * @returns An array of parsed row objects
      */
     private static parseTsv(tsvText: string): RheaTsvRow[] {
-        const lines = tsvText.trim().split('\n');
-        if (lines.length < 2) {
-            throw new RheaError('Invalid TSV format: insufficient lines');
+        const parseResult = Papa.parse<RheaTsvRow>(tsvText, {
+            header: true,
+            delimiter: '\t',
+            skipEmptyLines: true,
+            transformHeader: (header: string) => header.trim(),
+            transform: (value: string) => value.trim()
+        });
+
+        if (parseResult.errors.length > 0) {
+            throw new RheaError(`TSV parsing errors: ${parseResult.errors.map(e => e.message).join(', ')}`);
         }
 
-        const headers = lines[0].split('\t');
-        const rows: RheaTsvRow[] = [];
-
-        for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split('\t');
-            const row: any = {};
-
-            for (let j = 0; j < headers.length; j++) {
-                row[headers[j]] = values[j] || '';
-            }
-
-            rows.push(row as RheaTsvRow);
+        if (!parseResult.data || parseResult.data.length === 0) {
+            throw new RheaError('Invalid TSV format: no data found');
         }
 
-        return rows;
+        return parseResult.data;
     }
 }
 
