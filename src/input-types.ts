@@ -458,7 +458,6 @@ export class ImageUpload extends BaseInput {
 export class PDFUpload extends BaseInput {
     private file: string;
     private pages?: number[];
-    private processedFile?: string;
 
     /**
      * @param file - File path to the PDF file
